@@ -2234,7 +2234,9 @@ static void cache_flusharray (kmem_cache_t* cachep, struct array_cache *ac)
 	BUG_ON(!batchcount || batchcount > ac->avail);
 #endif
 	check_irq_off(); // 割り込みが無効になっているか
-	spin_lock(&cachep->spinlock); // 
+	spin_lock(&cachep->spinlock); // スピンロックを取得
+
+	// 共有キャッシュが存在する場合
 	if (cachep->lists.shared) {
 		struct array_cache *shared_array = cachep->lists.shared;
 		int max = shared_array->limit-shared_array->avail;
