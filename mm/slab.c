@@ -248,10 +248,10 @@ struct slab_rcu {
  *
  */
 struct array_cache {
-	unsigned int avail;
-	unsigned int limit;
-	unsigned int batchcount;
-	unsigned int touched;
+	unsigned int avail; /* 使用可能なオブジェクトのポインタ数*/
+	unsigned int limit; /* ローカルキャッシュ(ポインタ配列)のサイズ */
+	unsigned int batchcount; /* 一度に処理するローカルキャッシュ内のオブジェクト数 */
+	unsigned int touched; /* 直近でローカルキャッシュを使用しているかどうか */
 };
 
 /* bootstrap: The caches do not work without cpuarrays anymore,
@@ -1987,58 +1987,70 @@ static void* cache_alloc_refill(kmem_cache_t* cachep, int flags)
 	struct array_cache *ac;
 
 	check_irq_off();
-	ac = ac_data(cachep);
+	ac = ac_data(cachep); // ローカルキャッシュ情報を取得
 retry:
-	batchcount = ac->batchcount;
-	if (!ac->touched && batchcount > BATCHREFILL_LIMIT) {
+	batchcount = ac->batchcount; // 一度に処理するローカルキャッシュの数を取得
+	if (!ac->touched && batchcount > BATCHREFILL_LIMIT) { // 最大数よりも多い場合
 		/* if there was little recent activity on this
 		 * cache, then perform only a partial refill.
 		 * Otherwise we could generate refill bouncing.
 		 */
-		batchcount = BATCHREFILL_LIMIT;
+		batchcount = BATCHREFILL_LIMIT; // 一度に処理するローカルキャッシュ数を最大値まで減らす
 	}
-	l3 = list3_data(cachep);
+	l3 = list3_data(cachep); // スラブのリストを取得
 
-	BUG_ON(ac->avail > 0);
-	spin_lock(&cachep->spinlock);
-	if (l3->shared) {
-		struct array_cache *shared_array = l3->shared;
-		if (shared_array->avail) {
-			if (batchcount > shared_array->avail)
-				batchcount = shared_array->avail;
-			shared_array->avail -= batchcount;
-			ac->avail = batchcount;
+	BUG_ON(ac->avail > 0); // 使用可能数が0以上の場合 == バグ
+	spin_lock(&cachep->spinlock); // スピンロックを取得
+
+	if (l3->shared) { // CPU間で共有しているキャッシュが存在する
+		struct array_cache *shared_array = l3->shared; // CPU間で共有しているキャッシュにアクセス
+		if (shared_array->avail) { // 利用可能である場合
+
+			if (batchcount > shared_array->avail) // 利用可能数が一度に処理する数よりも下回る場合
+				batchcount = shared_array->avail; // 利用可能数を処理対象に設定
+			
+			shared_array->avail -= batchcount; //  取得数を利用可能数から差し引く
+			ac->avail = batchcount; // ローカルキャッシュ利用可能数を増やす
+			
+			// CPU間の共有ローカルキャッシュからカレントプロセッサのローカルキャッシュにコピー
 			memcpy(ac_entry(ac), &ac_entry(shared_array)[shared_array->avail],
 					sizeof(void*)*batchcount);
-			shared_array->touched = 1;
+
+			shared_array->touched = 1; // 最近キャッシュにアクセスしたことを記録
 			goto alloc_done;
 		}
 	}
+
+	// CPU間で共有しているキャッシュが存在しなかった場合
 	while (batchcount > 0) {
 		struct list_head *entry;
 		struct slab *slabp;
+
 		/* Get slab alloc is to come from. */
-		entry = l3->slabs_partial.next;
-		if (entry == &l3->slabs_partial) {
-			l3->free_touched = 1;
+		entry = l3->slabs_partial.next; // 一部使用済みのオブジェクトを持つスラブにアクセス
+		if (entry == &l3->slabs_partial) { // 空きがない場合
+			l3->free_touched = 1; // 未使用のオブジェクトだけを持つスラブにアクセス
 			entry = l3->slabs_free.next;
-			if (entry == &l3->slabs_free)
-				goto must_grow;
+			if (entry == &l3->slabs_free) // 空きがない場合
+				goto must_grow; // スラブを確保する処理へ
 		}
 
-		slabp = list_entry(entry, struct slab, list);
+		slabp = list_entry(entry, struct slab, list); // リストからスラブを取得
 		check_slabp(cachep, slabp);
 		check_spinlock_acquired(cachep);
+
 		while (slabp->inuse < cachep->num && batchcount--) {
 			kmem_bufctl_t next;
+
+			// 統計情報を更新
 			STATS_INC_ALLOCED(cachep);
 			STATS_INC_ACTIVE(cachep);
 			STATS_SET_HIGH(cachep);
 
-			/* get obj pointer */
+			/* 空きオブジェクトへのポインタを取得 */
 			ac_entry(ac)[ac->avail++] = slabp->s_mem + slabp->free*cachep->objsize;
 
-			slabp->inuse++;
+			slabp->inuse++; // 使用数を更新
 			next = slab_bufctl(slabp)[slabp->free];
 #if DEBUG
 			slab_bufctl(slabp)[slabp->free] = BUFCTL_FREE;
@@ -2047,33 +2059,34 @@ retry:
 		}
 		check_slabp(cachep, slabp);
 
-		/* move slabp to correct slabp list: */
+		/* スラブを適切なリストに繋ぐ */
 		list_del(&slabp->list);
 		if (slabp->free == BUFCTL_END)
-			list_add(&slabp->list, &l3->slabs_full);
+			list_add(&slabp->list, &l3->slabs_full); // 全て使用中のリスト
 		else
-			list_add(&slabp->list, &l3->slabs_partial);
+			list_add(&slabp->list, &l3->slabs_partial); // 一部使用中のリスト
 	}
 
 must_grow:
-	l3->free_objects -= ac->avail;
+	l3->free_objects -= ac->avail; // フリーオブジェクトから使用可能なオブジェクト数を減算
 alloc_done:
-	spin_unlock(&cachep->spinlock);
+	spin_unlock(&cachep->spinlock); // スピンロック
 
+	// 利用可能なローカルキャッシュが存在しない場合
 	if (unlikely(!ac->avail)) {
 		int x;
-		x = cache_grow(cachep, flags, -1);
+		x = cache_grow(cachep, flags, -1); // スラブ内のキャッシュを増加させる
 		
 		// cache_grow can reenable interrupts, then ac could change.
-		ac = ac_data(cachep);
-		if (!x && ac->avail == 0)	// no objects in sight? abort
+		ac = ac_data(cachep); // ローカルキャッシュを再度取得
+		if (!x && ac->avail == 0) // cahce_grow()に失敗
 			return NULL;
 
-		if (!ac->avail)		// objects refilled by interrupt?
-			goto retry;
+		if (!ac->avail) // 有効なキャッシュがない
+			goto retry; // 再度取得を試みる
 	}
-	ac->touched = 1;
-	return ac_entry(ac)[--ac->avail];
+	ac->touched = 1; // 最近キャッシュにアクセスしたことを示す
+	return ac_entry(ac)[--ac->avail]; // 取得したローカルキャッシュから取得
 }
 
 static inline void
@@ -2211,16 +2224,17 @@ static void free_block(kmem_cache_t *cachep, void **objpp, int nr_objects)
 	}
 }
 
+// ローカルキャッシュが保持する空きオブジェクトを減らす
 static void cache_flusharray (kmem_cache_t* cachep, struct array_cache *ac)
 {
 	int batchcount;
 
-	batchcount = ac->batchcount;
+	batchcount = ac->batchcount; // 一度に処理するオブジェクト数
 #if DEBUG
 	BUG_ON(!batchcount || batchcount > ac->avail);
 #endif
-	check_irq_off();
-	spin_lock(&cachep->spinlock);
+	check_irq_off(); // 割り込みが無効になっているか
+	spin_lock(&cachep->spinlock); // 
 	if (cachep->lists.shared) {
 		struct array_cache *shared_array = cachep->lists.shared;
 		int max = shared_array->limit-shared_array->avail;
@@ -2270,19 +2284,20 @@ free_done:
  */
 static inline void __cache_free (kmem_cache_t *cachep, void* objp)
 {
-	struct array_cache *ac = ac_data(cachep);
+	struct array_cache *ac = ac_data(cachep); // ローカルキャッシュを取得
 
-	check_irq_off();
+	check_irq_off(); // スピンロックを確認
 	objp = cache_free_debugcheck(cachep, objp, __builtin_return_address(0));
 
-	if (likely(ac->avail < ac->limit)) {
-		STATS_INC_FREEHIT(cachep);
-		ac_entry(ac)[ac->avail++] = objp;
+	// ローカルキャッシュに利用可能なオブジェクトとして戻すことができる場合
+	if (likely(ac->avail < ac->limit)) { 
+		STATS_INC_FREEHIT(cachep); // 統計情報の更新
+		ac_entry(ac)[ac->avail++] = objp; // 解放対象のオブジェクトを利用可能オブジェクトの配列に繋ぐ
 		return;
 	} else {
-		STATS_INC_FREEMISS(cachep);
-		cache_flusharray(cachep, ac);
-		ac_entry(ac)[ac->avail++] = objp;
+		STATS_INC_FREEMISS(cachep); // 統計情報の更新
+		cache_flusharray(cachep, ac); // ローカルキャッシュが保持する空きオブジェクトを減らす
+		ac_entry(ac)[ac->avail++] = objp; // 解放対象のオブジェクトを利用可能オブジェクトの配列に繋ぐ
 	}
 }
 
@@ -2530,9 +2545,9 @@ void kmem_cache_free (kmem_cache_t *cachep, void *objp)
 {
 	unsigned long flags;
 
-	local_irq_save(flags);
+	local_irq_save(flags); // 割り込みを禁止
 	__cache_free(cachep, objp);
-	local_irq_restore(flags);
+	local_irq_restore(flags); // ステータスレジスタの値をリストア(割り込み許可)
 }
 
 EXPORT_SYMBOL(kmem_cache_free);
