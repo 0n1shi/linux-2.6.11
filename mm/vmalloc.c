@@ -185,7 +185,7 @@ void unmap_vm_area(struct vm_struct *area)
 	pgd_t *pgd;
 	int i;
 
-	pgd = pgd_offset_k(address);
+	pgd = pgd_offset_k(address); // ページグローバルディレクトリのエントリを取得
 	flush_cache_vunmap(address, end);
 	for (i = pgd_index(address); i <= pgd_index(end-1); i++) {
 		next = (address + PGDIR_SIZE) & PGDIR_MASK;
@@ -198,19 +198,31 @@ void unmap_vm_area(struct vm_struct *area)
 	flush_tlb_kernel_range((unsigned long) area->addr, end);
 }
 
+/** 
+ * 連続するリニアアドレスを非連続なページフレームに割り当てる。
+ * 
+ * @area: 非連続メモリディスクリプタ
+ * @prot: 割り当てたページの保護bit
+ * @pages: ページディスクリプタへのポインタ配列を指すポインタ変数のアドレス
+ */
+
 int map_vm_area(struct vm_struct *area, pgprot_t prot, struct page ***pages)
 {
-	unsigned long address = (unsigned long) area->addr;
-	unsigned long end = address + (area->size-PAGE_SIZE);
+	unsigned long address = (unsigned long) area->addr; // 領域の開始アドレス
+	unsigned long end = address + (area->size-PAGE_SIZE); // 終端アドレス
 	unsigned long next;
 	pgd_t *pgd;
 	int err = 0;
 	int i;
 
-	pgd = pgd_offset_k(address);
-	spin_lock(&init_mm.page_table_lock);
+	pgd = pgd_offset_k(address); // ページグローバルディレクトリのエントリを取得
+	spin_lock(&init_mm.page_table_lock); // スピンロックで保護
 	for (i = pgd_index(address); i <= pgd_index(end-1); i++) {
-		pud_t *pud = pud_alloc(&init_mm, pgd, address);
+		// ページアッパーディレクトリを作成し
+		// ページグローバルディレクトリに対応するエントリに
+		// ページアッパーディレクトリの物理アドレスを書き込む
+		pud_t *pud = pud_alloc(&init_mm, pgd, address); 
+		// 作成に失敗
 		if (!pud) {
 			err = -ENOMEM;
 			break;
@@ -218,6 +230,8 @@ int map_vm_area(struct vm_struct *area, pgprot_t prot, struct page ***pages)
 		next = (address + PGDIR_SIZE) & PGDIR_MASK;
 		if (next < address || next > end)
 			next = end;
+
+		// ページアッパーディレクトリに対応する全てのページテーブルを割り当てる
 		if (map_area_pud(pud, address, next, prot, pages)) {
 			err = -ENOMEM;
 			break;
@@ -241,6 +255,7 @@ struct vm_struct *__get_vm_area(unsigned long size, unsigned long flags,
 	unsigned long align = 1;
 	unsigned long addr;
 
+	// ioremap時のバリデーション
 	if (flags & VM_IOREMAP) {
 		int bit = fls(size);
 
@@ -251,14 +266,14 @@ struct vm_struct *__get_vm_area(unsigned long size, unsigned long flags,
 
 		align = 1ul << bit;
 	}
-	addr = ALIGN(start, align);
+	addr = ALIGN(start, align); // アラインメント
 
-	area = kmalloc(sizeof(*area), GFP_KERNEL);
+	area = kmalloc(sizeof(*area), GFP_KERNEL); // 汎用キャッシュからメモリ領域の取得
 	if (unlikely(!area))
 		return NULL;
 
 	/*
-	 * We always allocate a guard page.
+	 * 保護用のページを割り当てる
 	 */
 	size += PAGE_SIZE;
 	if (unlikely(!size)) {
@@ -266,7 +281,8 @@ struct vm_struct *__get_vm_area(unsigned long size, unsigned long flags,
 		return NULL;
 	}
 
-	write_lock(&vmlist_lock);
+	write_lock(&vmlist_lock); // vm_structリスト用のスピンロックを取得
+	// リストを先頭(vmlist)からトラバースし空き領域を探す
 	for (p = &vmlist; (tmp = *p) != NULL ;p = &tmp->next) {
 		if ((unsigned long)tmp->addr < addr) {
 			if((unsigned long)tmp->addr + tmp->size >= addr)
@@ -283,37 +299,38 @@ struct vm_struct *__get_vm_area(unsigned long size, unsigned long flags,
 			goto out;
 	}
 
+// 見つかった場合
 found:
+	// リストにvm_structを繋ぐ
 	area->next = *p;
 	*p = area;
-
+	// vm_struct構造体を初期化
 	area->flags = flags;
 	area->addr = (void *)addr;
 	area->size = size;
 	area->pages = NULL;
 	area->nr_pages = 0;
 	area->phys_addr = 0;
-	write_unlock(&vmlist_lock);
+	write_unlock(&vmlist_lock); // スピンロックを解放
 
 	return area;
 
 out:
-	write_unlock(&vmlist_lock);
-	kfree(area);
+	write_unlock(&vmlist_lock); // スピンロックを解放
+	kfree(area); // 取得したメモリ領域を開放する
 	if (printk_ratelimit())
 		printk(KERN_WARNING "allocation failed: out of vmalloc space - use vmalloc=<size> to increase size.\n");
 	return NULL;
 }
 
 /**
- *	get_vm_area  -  reserve a contingous kernel virtual area
+ *	get_vm_area  -  連続したカーネルの仮想領域を予約する
  *
- *	@size:		size of the area
- *	@flags:		%VM_IOREMAP for I/O mappings or VM_ALLOC
+ *	@size:		領域のサイズ
+ *	@flags:		I/O mappingsのためのVM_IOREMAP もしくは VM_ALLOC
  *
- *	Search an area of @size in the kernel virtual mapping area,
- *	and reserved it for out purposes.  Returns the area descriptor
- *	on success or %NULL on failure.
+ *  カーネルの仮想マッピングされた領域内のsizeで指定したサイズの領域を探し予約する
+ *  成功時はvm_structのポインタを返し、失敗時にはNULLを返す
  */
 struct vm_struct *get_vm_area(unsigned long size, unsigned long flags)
 {
@@ -352,16 +369,19 @@ void __vunmap(void *addr, int deallocate_pages)
 {
 	struct vm_struct *area;
 
+	// バリデーション
 	if (!addr)
 		return;
-
 	if ((PAGE_SIZE-1) & (unsigned long)addr) {
 		printk(KERN_ERR "Trying to vfree() bad address (%p)\n", addr);
 		WARN_ON(1);
 		return;
 	}
 
+	// 領域に対応するカーネル用ページテーブル内エントリを削除
 	area = remove_vm_area(addr);
+
+	// 存在しない領域を解放対象とした場合
 	if (unlikely(!area)) {
 		printk(KERN_ERR "Trying to vfree() nonexistent vm area (%p)\n",
 				addr);
@@ -369,34 +389,35 @@ void __vunmap(void *addr, int deallocate_pages)
 		return;
 	}
 	
+	// 当該フラグがセットされている場合はページフレームを開放する(ページフレームアロケータに返す)
 	if (deallocate_pages) {
 		int i;
 
+		// ページ毎に処理
 		for (i = 0; i < area->nr_pages; i++) {
 			if (unlikely(!area->pages[i]))
 				BUG();
+			// どこからも参照されていない場合は当該ページを開放する
 			__free_page(area->pages[i]);
 		}
 
 		if (area->nr_pages > PAGE_SIZE/sizeof(struct page *))
 			vfree(area->pages);
 		else
-			kfree(area->pages);
+			kfree(area->pages); // ポインタ配列自体を解放
 	}
 
-	kfree(area);
+	kfree(area); // vm_structを解放
 	return;
 }
 
 /**
- *	vfree  -  release memory allocated by vmalloc()
+ *	vfree  -  vmalloc()で割り当てたメモリを開放する
  *
- *	@addr:		memory base address
+ *	@addr:		メモリのベースアドレス
  *
- *	Free the virtually contiguous memory area starting at @addr, as
- *	obtained from vmalloc(), vmalloc_32() or __vmalloc().
- *
- *	May not be called in interrupt context.
+ *  仮想的に連続している領域(addrで開始する)を解放する。
+ *	おそらくこの関数は割り込みコンテキストからは呼び出されない
  */
 void vfree(void *addr)
 {
@@ -407,14 +428,11 @@ void vfree(void *addr)
 EXPORT_SYMBOL(vfree);
 
 /**
- *	vunmap  -  release virtual mapping obtained by vmap()
+ *	vunmap  -  release virtual mapping obtained by vmap()で取得された仮想的なマッピングを開放する
+ *	@addr:		ベースになるメモリアドレス
  *
- *	@addr:		memory base address
- *
- *	Free the virtually contiguous memory area starting at @addr,
- *	which was created from the page array passed to vmap().
- *
- *	May not be called in interrupt context.
+ *  (addrで開始する)vmap()から渡されたページ配列から作成された仮想的に連続するメモリ領域を開放する
+ *	割り込みコンテキストからは呼び出されないだろう
  */
 void vunmap(void *addr)
 {
@@ -457,61 +475,70 @@ void *vmap(struct page **pages, unsigned int count,
 EXPORT_SYMBOL(vmap);
 
 /**
- *	__vmalloc  -  allocate virtually contiguous memory
+ *	__vmalloc  -  仮想的に連続しているメモリを予約する
  *
- *	@size:		allocation size
- *	@gfp_mask:	flags for the page level allocator
- *	@prot:		protection mask for the allocated pages
+ *	@size:		割り当てサイズ
+ *	@gfp_mask:	ページアロケータのためのフラグ
+ *	@prot:		割り当てたページの保護マスク
  *
- *	Allocate enough pages to cover @size from the page level
- *	allocator with @gfp_mask flags.  Map them into contiguous
- *	kernel virtual space, using a pagetable protection of @prot.
+ *  サイズをカバーできるページをgfp_maskフラグと共にページアロケータから割り当てる。
+ *  protのページテーブル保護を用いて割り当てたページは連続する仮想領域にマップする。
  */
 void *__vmalloc(unsigned long size, int gfp_mask, pgprot_t prot)
 {
 	struct vm_struct *area;
 	struct page **pages;
 	unsigned int nr_pages, array_size, i;
-
-	size = PAGE_ALIGN(size);
+	
+	// サイズのアライメント及びバリデーション
+	size = PAGE_ALIGN(size); // アライメント
 	if (!size || (size >> PAGE_SHIFT) > num_physpages)
 		return NULL;
 
+	// 空き領域を取得
 	area = get_vm_area(size, VM_ALLOC);
 	if (!area)
 		return NULL;
 
-	nr_pages = size >> PAGE_SHIFT;
-	array_size = (nr_pages * sizeof(struct page *));
+	nr_pages = size >> PAGE_SHIFT; // ページ数に変換
+	array_size = (nr_pages * sizeof(struct page *)); // ページ数のページディスクリプタ配列のサイズ
 
-	area->nr_pages = nr_pages;
-	/* Please note that the recursion is strictly bounded. */
-	if (array_size > PAGE_SIZE)
-		pages = __vmalloc(array_size, gfp_mask, PAGE_KERNEL);
+	area->nr_pages = nr_pages; // ページ数を更新
+	
+	/* この再帰呼び出しは厳しく制限されている */
+	if (array_size > PAGE_SIZE) // ページサイズより大きい場合
+		pages = __vmalloc(array_size, gfp_mask, PAGE_KERNEL); // 再帰呼び出し
 	else
-		pages = kmalloc(array_size, (gfp_mask & ~__GFP_HIGHMEM));
-	area->pages = pages;
+		pages = kmalloc(array_size, (gfp_mask & ~__GFP_HIGHMEM)); // 汎用キャッシュから割り当てる
+	area->pages = pages; // 取得したページディスクリプタのポインタ配列
+	
+	// 取得できなかった場合
 	if (!area->pages) {
 		remove_vm_area(area->addr);
 		kfree(area);
 		return NULL;
 	}
-	memset(area->pages, 0, array_size);
+	memset(area->pages, 0, array_size); // 当該領域を0クリア
 
+	// 取得した領域にページを割り当てる
 	for (i = 0; i < area->nr_pages; i++) {
+		// ページを割り当て、メモリディスクリプタのメンバであるリストにページディスクリプタを設定する
 		area->pages[i] = alloc_page(gfp_mask);
+
+		// 割り当てに失敗した場合
 		if (unlikely(!area->pages[i])) {
-			/* Successfully allocated i pages, free them in __vunmap() */
+			/* いくつかのページの割り当てに成功していた場合には__vunmap()関数でそれらを開放する */
 			area->nr_pages = i;
 			goto fail;
 		}
 	}
-	
+
+	// 連続するリニアアドレスを非連続なページフレームに割り当てる。
 	if (map_vm_area(area, prot, &pages))
 		goto fail;
 	return area->addr;
 
-fail:
+fail: // 割り当てに失敗した場合にはそれを開放する
 	vfree(area->addr);
 	return NULL;
 }
@@ -519,15 +546,14 @@ fail:
 EXPORT_SYMBOL(__vmalloc);
 
 /**
- *	vmalloc  -  allocate virtually contiguous memory
+ *	vmalloc  -  仮想的に連続したメモリを割り当てる
  *
- *	@size:		allocation size
+ *	@size:		割り当てサイズ
  *
- *	Allocate enough pages to cover @size from the page level
- *	allocator and map them into contiguous kernel virtual space.
+ *  ページアロケータからサイズ以上のページを割り当て、それを連続するカーネルの
+ *  仮想メモリ領域にマッピングする。
  *
- *	For tight cotrol over page level allocator and protection flags
- *	use __vmalloc() instead.
+ *  厳しいページアロケータの制御及び保護フラグのため、__vmalloc()を代わりに使用する。
  */
 void *vmalloc(unsigned long size)
 {

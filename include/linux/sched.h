@@ -205,57 +205,104 @@ extern void arch_unmap_area_topdown(struct vm_area_struct *area);
 
 
 struct mm_struct {
-	struct vm_area_struct * mmap;		/* list of VMAs */
-	struct rb_root mm_rb;
-	struct vm_area_struct * mmap_cache;	/* last find_vma result */
+	struct vm_area_struct * mmap;		/* メモリリージョンオブジェクトリストのヘッド */
+	struct rb_root mm_rb; /* メモリリージョンオブジェクトの赤黒木のルート要素を指す */
+	struct vm_area_struct * mmap_cache;	/* 最後に利用したメモリリージョンオブジェクト */
+
+	// プロセス空間から利用可能なリニアドレス区間を探す
 	unsigned long (*get_unmapped_area) (struct file *filp,
 				unsigned long addr, unsigned long len,
 				unsigned long pgoff, unsigned long flags);
+	
+	// リニアアドレス区間の開放時に呼び出す
 	void (*unmap_area) (struct vm_area_struct *area);
-	unsigned long mmap_base;		/* base of mmap area */
-	unsigned long free_area_cache;		/* first hole */
-	pgd_t * pgd;
-	atomic_t mm_users;			/* How many users with user space? */
-	atomic_t mm_count;			/* How many references to "struct mm_struct" (users count as 1) */
-	int map_count;				/* number of VMAs */
-	struct rw_semaphore mmap_sem;
-	spinlock_t page_table_lock;		/* Protects page tables, mm->rss, mm->anon_rss */
 
-	struct list_head mmlist;		/* List of maybe swapped mm's.  These are globally strung
-						 * together off init_mm.mmlist, and are protected
-						 * by mmlist_lock
-						 */
 
+	unsigned long mmap_base;		/* 無名メモリリージョンまたはファイルがマッピングされたメモリリージョンのリニアアドレスの先頭 */
+	unsigned long free_area_cache;		/* 空いているリニアアドレスを探し始めるアドレス */
+	pgd_t * pgd; // ページグローバルデェレクトリのアドレス
+	atomic_t mm_users;			/* 使用しているユーザ数 */
+	atomic_t mm_count;			/* この構造体の参照数 */
+	int map_count;				/* メモリリージョン数 */
+	struct rw_semaphore mmap_sem; // メモリリージョンの読み書き用セマフォ
+	spinlock_t page_table_lock;		/* メモリリージョン及びページテーブル用のスピンロック, mm->rss, mm->anon_rss */
+
+	struct list_head mmlist; // メモリディスクリプタのリスト(次の要素を指す)
+	/* List of maybe swapped mm's.  These are globally strung
+	* together off init_mm.mmlist, and are protected
+	* by mmlist_lock
+	*/
+
+	/**
+	 * start_code: テキストセグメントの先頭アドレス
+	 * end_code: テキストセグメントの終端アドレス
+	 * start_data: データセグメントの先頭アドレス
+	 * end_data: データセグメントの終端アドレス
+	 */
 	unsigned long start_code, end_code, start_data, end_data;
+
+	/**
+	 * start_brk: ヒープの先頭アドレス
+	 * brk: ヒープの現時点での終端アドレス
+	 * start_stack: ユーザスタックの先頭アドレス
+	 */
 	unsigned long start_brk, brk, start_stack;
+
+	/**
+	 * arg_start: コマンドライン引数の先頭アドレス
+	 * arg_end: コマンドライン引数の終端アドレス
+	 * env_start: 環境変数の先頭アドレス
+	 * env_end: 環境変数の終端アドレス
+	 */
 	unsigned long arg_start, arg_end, env_start, env_end;
+
+	/**
+	 * rss: プロセスに割り当てられているページフレームの数
+	 * anon_rss: 無名メモリマッピングに割り当てたページフレーム
+	 * total_vm: アドレス空間全体のサイズ(ページサイズ単位)
+	 * locked_vm: スワップアウトされないページ数
+	 * shared_vm: 共有ファイルメモリマッピング領域のページ数
+	 */
 	unsigned long rss, anon_rss, total_vm, locked_vm, shared_vm;
+
+	/**
+	 * exec_vm: 実行可能メモリまピング領域のページ数
+	 * stack_vm: ユーザモードスタック領域のページ数
+	 * reserved_vm: 予約されたメモリリージョン及び特殊メモリリージョンの領域のページ数
+	 * def_flags: メモリリージョンの標準初期設定のアクセスフラグ
+	 * nr_ptes: PTEの数
+	 */
 	unsigned long exec_vm, stack_vm, reserved_vm, def_flags, nr_ptes;
 
-	unsigned long saved_auxv[42]; /* for /proc/PID/auxv */
+	unsigned long saved_auxv[42]; /* /proc/PID/auxv */
 
-	unsigned dumpable:1;
-	cpumask_t cpu_vm_mask;
+	unsigned dumpable:1; // コアダンプの取得が可能かどうか
+	cpumask_t cpu_vm_mask; // 遅延TLB切り替えのためのビットマスク
 
-	/* Architecture-specific MM context */
+	/* アーキテクチャ依存のコンテキスト情報 */
 	mm_context_t context;
 
 	/* Token based thrashing protection. */
-	unsigned long swap_token_time;
-	char recent_pagein;
+	unsigned long swap_token_time; // スワップの優先権の資格を得る時刻(?)
+	char recent_pagein; // 直近でページフォルトが発生したことを意味する
 
 	/* coredumping support */
-	int core_waiters;
+	int core_waiters; // アドレス空間のコンテキストをコアファイルにダンプしている軽量プロセスの数
+
+	/**
+	 * core_startup_done: コアダンプ生成時に利用する完了通知用データ構造へのポインタ
+	 * core_done: コアファイル生成時に利用する完了通用データ構造体
+	 */
 	struct completion *core_startup_done, core_done;
 
 	/* aio bits */
-	rwlock_t		ioctx_list_lock;
-	struct kioctx		*ioctx_list;
+	rwlock_t		ioctx_list_lock; // 非同期I/O(AIO)のコンテキストを保護するためのスピンロック
+	struct kioctx		*ioctx_list; // AIOコンテキストのリスト
 
-	struct kioctx		default_kioctx;
+	struct kioctx		default_kioctx; // デフォルトのAIOコンテキスト
 
-	unsigned long hiwater_rss;	/* High-water RSS usage */
-	unsigned long hiwater_vm;	/* High-water virtual memory usage */
+	unsigned long hiwater_rss;	/* 当該プロセスがある時点で使用していたページフレームの最大数 */
+	unsigned long hiwater_vm;	/* 当該プロセスのメモリリージョンがある時点で使用していたページフレームの数 */
 };
 
 struct sighand_struct {

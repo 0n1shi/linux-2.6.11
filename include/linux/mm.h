@@ -57,20 +57,22 @@ extern int sysctl_legacy_va_layout;
  * per VM-area/task.  A VM area is any part of the process virtual memory
  * space that has a special rule for the page-fault handlers (ie a shared
  * library, the executable area etc).
+ * 当該構造体はメモリリージョンを定義している。VMエリア/タスク毎に存在する。
+ * VMエリアはページフォルトのための特別なルールを持っているプロセスの仮想メモリ空間の一部である。
+ * (共有ライブラリや実行可能エリアなど)
  */
 struct vm_area_struct {
-	struct mm_struct * vm_mm;	/* The address space we belong to. */
-	unsigned long vm_start;		/* Our start address within vm_mm. */
-	unsigned long vm_end;		/* The first byte after our end address
-					   within vm_mm. */
+	struct mm_struct * vm_mm;	/* メモリリージョンを持つメモリディスクリプタを指すポインタ */
+	unsigned long vm_start;		/* メモリリージョンの先頭リニアアドレス */
+	unsigned long vm_end;		/* メモリリージョンの終端アドレスの次のアドレス */
 
-	/* linked list of VM areas per task, sorted by address */
+	/* アドレスでソートされたプロセスリスト上の次のメモリリージョン */
 	struct vm_area_struct *vm_next;
 
-	pgprot_t vm_page_prot;		/* Access permissions of this VMA. */
-	unsigned long vm_flags;		/* Flags, listed below. */
+	pgprot_t vm_page_prot;		/* メモリリージョンのページフレームへのアクセス権 */
+	unsigned long vm_flags;		/* メモリリージョンのフラグ */
 
-	struct rb_node vm_rb;
+	struct rb_node vm_rb; // 赤黒木用のデータ
 
 	/*
 	 * For areas with an address space and backing store,
@@ -80,13 +82,13 @@ struct vm_area_struct {
 	 */
 	union {
 		struct {
-			struct list_head list;
+			struct list_head list; 
 			void *parent;	/* aligns with prio_tree_node parent */
 			struct vm_area_struct *head;
 		} vm_set;
 
 		struct raw_prio_tree_node prio_tree_node;
-	} shared;
+	} shared; // 逆マッピング用のデータ構造と対応
 
 	/*
 	 * A file's MAP_PRIVATE vma can be in both i_mmap tree and anon_vma
@@ -94,18 +96,17 @@ struct vm_area_struct {
 	 * can only be in the i_mmap tree.  An anonymous MAP_PRIVATE, stack
 	 * or brk vma (with NULL file) can only be in an anon_vma list.
 	 */
-	struct list_head anon_vma_node;	/* Serialized by anon_vma->lock */
-	struct anon_vma *anon_vma;	/* Serialized by page_table_lock */
+	struct list_head anon_vma_node;	/* 無名メモリリージョンのリストを指す */
+	struct anon_vma *anon_vma;	/* anon_vmaを指すポインタ */
 
 	/* Function pointers to deal with this struct. */
-	struct vm_operations_struct * vm_ops;
+	struct vm_operations_struct * vm_ops; // メモリリージョン操作用関数へのポインタ
 
 	/* Information about our backing store: */
-	unsigned long vm_pgoff;		/* Offset (within vm_file) in PAGE_SIZE
-					   units, *not* PAGE_CACHE_SIZE */
-	struct file * vm_file;		/* File we map to (can be NULL). */
-	void * vm_private_data;		/* was vm_pte (shared mem) */
-	unsigned long vm_truncate_count;/* truncate_count or restart_addr */
+	unsigned long vm_pgoff;		/* マッピングしているファイル内オフセット */
+	struct file * vm_file;		/* マッピングしているファイルのファイルオブジェクトのポインタ */
+	void * vm_private_data;		/* メモリリージョン固有のデータ */
+	unsigned long vm_truncate_count;/* ファイルの非線形マッピング用リニアアドレス空間を開放時に使用 */
 
 #ifndef CONFIG_MMU
 	atomic_t vm_usage;		/* refcount (VMAs shared if !MMU) */
@@ -135,35 +136,35 @@ extern unsigned int kobjsize(const void *objp);
 /*
  * vm_flags..
  */
-#define VM_READ		0x00000001	/* currently active flags */
-#define VM_WRITE	0x00000002
-#define VM_EXEC		0x00000004
-#define VM_SHARED	0x00000008
+#define VM_READ		0x00000001 // 読み書き可能
+#define VM_WRITE	0x00000002 // 書き込み可能
+#define VM_EXEC		0x00000004 // 実行可能
+#define VM_SHARED	0x00000008 // 複数プロセスで共有可能
 
-#define VM_MAYREAD	0x00000010	/* limits for mprotect() etc */
-#define VM_MAYWRITE	0x00000020
-#define VM_MAYEXEC	0x00000040
-#define VM_MAYSHARE	0x00000080
+#define VM_MAYREAD	0x00000010 // VM_READフラグを設定可能
+#define VM_MAYWRITE	0x00000020 // VM_WRITEフラグを設定可能
+#define VM_MAYEXEC	0x00000040 // VM_EXECフラグを設定可能
+#define VM_MAYSHARE	0x00000080 // VM_SHAREフラグを設定可能
 
-#define VM_GROWSDOWN	0x00000100	/* general info on the segment */
-#define VM_GROWSUP	0x00000200
-#define VM_SHM		0x00000400	/* shared memory area, don't swap out */
-#define VM_DENYWRITE	0x00000800	/* ETXTBSY on write attempts.. */
+#define VM_GROWSDOWN	0x00000100 // 低位アドレス方向に拡張可能
+#define VM_GROWSUP	0x00000200 // 高位アドレス方向に拡張可能
+#define VM_SHM		0x00000400	// IPC共有メモリ(スワップ不可)
+#define VM_DENYWRITE	0x00000800 // 書き込み不可ファイル
 
-#define VM_EXECUTABLE	0x00001000
-#define VM_LOCKED	0x00002000
-#define VM_IO           0x00004000	/* Memory mapped I/O or similar */
+#define VM_EXECUTABLE	0x00001000 // 実行可能ファイル
+#define VM_LOCKED	0x00002000 // ロック状態(スワップ不可)
+#define VM_IO           0x00004000	/* Memory Mapped I/O */
 
-					/* Used by sys_madvise() */
-#define VM_SEQ_READ	0x00008000	/* App will access data sequentially */
-#define VM_RAND_READ	0x00010000	/* App will not benefit from clustered reads */
+/* sys_madvise()によって使用される */
+#define VM_SEQ_READ	0x00008000	/* シーケンシャルにアクセス */
+#define VM_RAND_READ	0x00010000	/* ランダムアクセス */
 
-#define VM_DONTCOPY	0x00020000      /* Do not copy this vma on fork */
-#define VM_DONTEXPAND	0x00040000	/* Cannot expand with mremap() */
-#define VM_RESERVED	0x00080000	/* Don't unmap it from swap_out */
-#define VM_ACCOUNT	0x00100000	/* Is a VM accounted object */
-#define VM_HUGETLB	0x00400000	/* Huge TLB Page VM */
-#define VM_NONLINEAR	0x00800000	/* Is non-linear (remap_file_pages) */
+#define VM_DONTCOPY	0x00020000 // fork時にリージョンを複製しない
+#define VM_DONTEXPAND	0x00040000 // 拡張不可
+#define VM_RESERVED	0x00080000 // スワップアウト禁止
+#define VM_ACCOUNT	0x00100000 // Is a VM accounted object (?)
+#define VM_HUGETLB	0x00400000 // Huge TLB */
+#define VM_NONLINEAR	0x00800000 // 非線形マッピング
 
 #ifndef VM_STACK_DEFAULT_FLAGS		/* arch can override this */
 #define VM_STACK_DEFAULT_FLAGS VM_DATA_DEFAULT_FLAGS
@@ -194,9 +195,24 @@ extern pgprot_t protection_map[16];
  * to the functions called when a no-page or a wp-page exception occurs. 
  */
 struct vm_operations_struct {
+	/**
+	 * メモリリージョンを追加する際に呼び出す
+	 */
 	void (*open)(struct vm_area_struct * area);
+
+	/**
+	 * メモリリージョンを削除する際に呼び出す
+	 */
 	void (*close)(struct vm_area_struct * area);
+
+	/**
+	 * メモリリージョン内のリニアアドレスにアクセスする際に発生したページフォルトハンドラから呼び出される
+	 */
 	struct page * (*nopage)(struct vm_area_struct * area, unsigned long address, int *type);
+
+	/**
+	 * リニアアドレスに対応するページテーブルエントリを設定する(主にファイルの非線形なメモリマッピング)
+	 */
 	int (*populate)(struct vm_area_struct * area, unsigned long address, unsigned long len, pgprot_t prot, unsigned long pgoff, int nonblock);
 #ifdef CONFIG_NUMA
 	int (*set_policy)(struct vm_area_struct *vma, struct mempolicy *new);

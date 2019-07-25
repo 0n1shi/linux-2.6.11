@@ -343,16 +343,19 @@ void fastcall __mmdrop(struct mm_struct *mm)
  */
 void mmput(struct mm_struct *mm)
 {
+	// デクリメントした結果が0になるかどうか
 	if (atomic_dec_and_test(&mm->mm_users)) {
 		exit_aio(mm);
 		exit_mmap(mm);
+
+		// メモリディスクリプタリストが空でない場合には削除
 		if (!list_empty(&mm->mmlist)) {
 			spin_lock(&mmlist_lock);
 			list_del(&mm->mmlist);
 			spin_unlock(&mmlist_lock);
 		}
 		put_swap_token(mm);
-		mmdrop(mm);
+		mmdrop(mm); // メモリディスクリプタを破棄
 	}
 }
 EXPORT_SYMBOL_GPL(mmput);

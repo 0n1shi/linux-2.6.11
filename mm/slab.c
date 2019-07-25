@@ -205,11 +205,11 @@ static unsigned long offslab_limit;
  * Slabs are chained into three list: fully used, partial, fully free slabs.
  */
 struct slab {
-	struct list_head	list;
-	unsigned long		colouroff;
-	void			*s_mem;		/* including colour offset */
-	unsigned int		inuse;		/* num of objs active in slab */
-	kmem_bufctl_t		free;
+	struct list_head	list;			/* kmem_list3構造体のslabs_partial, slabs_fullまたはslabs_freeのいずれかのリスト */
+	unsigned long		colouroff;　/* スラブ内の先頭オブジェクトへのオフセット */
+	void			*s_mem;						/* スラブ内の先頭オブジェクト */
+	unsigned int		inuse;　		/* スラブ内の使用中オブジェクト数 */
+	kmem_bufctl_t		free;				/* スラブ内の先頭空きオブジェクトへのインデックス */
 };
 
 /*
@@ -271,13 +271,13 @@ struct arraycache_init {
  * fewer cross-node spinlock operations.
  */
 struct kmem_list3 {
-	struct list_head	slabs_partial;	/* partial list first, better asm code */
-	struct list_head	slabs_full;
-	struct list_head	slabs_free;
-	unsigned long	free_objects;
+	struct list_head	slabs_partial; /* 部分的に使用中のオブジェクトを持つスラブディスクリプタ用の双方向リスト */
+	struct list_head	slabs_full; /* 使用中オブジェクトを持つスラブディスクリプタ用の双方向リスト */
+	struct list_head	slabs_free; /* 空きオブジェクトを持つスラブディスクリプタ用の双方向リスト */
+	unsigned long	free_objects; /* スラブ内の空きオブジェクトの数 */
 	int		free_touched;
 	unsigned long	next_reap;
-	struct array_cache	*shared;
+	struct array_cache	*shared; /* ローカルキャッシュへのポインタ */
 };
 
 #define LIST3_INIT(parent) \
@@ -2173,23 +2173,28 @@ static inline void * __cache_alloc (kmem_cache_t *cachep, int flags)
  * the l3 structure
  */
 
+/**
+ * cachep: キャッシュ
+ * objpp: オブジェクト
+ * nr_objects: オブジェクト数
+ */
 static void free_block(kmem_cache_t *cachep, void **objpp, int nr_objects)
 {
 	int i;
 
-	check_spinlock_acquired(cachep);
+	check_spinlock_acquired(cachep); // スピンロックが取得されているか確認
 
 	/* NUMA: move add into loop */
-	cachep->lists.free_objects += nr_objects;
+	cachep->lists.free_objects += nr_objects; // スラブ内の空きオブジェクト数に解放数を加算
 
 	for (i = 0; i < nr_objects; i++) {
 		void *objp = objpp[i];
 		struct slab *slabp;
 		unsigned int objnr;
 
-		slabp = GET_PAGE_SLAB(virt_to_page(objp));
-		list_del(&slabp->list);
-		objnr = (objp - slabp->s_mem) / cachep->objsize;
+		slabp = GET_PAGE_SLAB(virt_to_page(objp)); // オブジェクトを管理するスラブを取得
+		list_del(&slabp->list); // スラブのリストを削除
+		objnr = (objp - slabp->s_mem) / cachep->objsize; // スラブ内のオブジェクトのインデックスを算出
 		check_slabp(cachep, slabp);
 #if DEBUG
 		if (slab_bufctl(slabp)[objnr] != BUFCTL_FREE) {
@@ -2198,26 +2203,33 @@ static void free_block(kmem_cache_t *cachep, void **objpp, int nr_objects)
 			BUG();
 		}
 #endif
-		slab_bufctl(slabp)[objnr] = slabp->free;
-		slabp->free = objnr;
+		slab_bufctl(slabp)[objnr] = slabp->free; // オブジェクトディスクリプタに代入
+		slabp->free = objnr; // オブジェクトディスクリプタのインデックスを代入(次の割り当て時に使用される)
 		STATS_DEC_ACTIVE(cachep);
-		slabp->inuse--;
+		slabp->inuse--; // 使用中のオブジェクト数を減らす
 		check_slabp(cachep, slabp);
 
-		/* fixup slab chains */
+		// 使用中のオブジェクトが存在しなくなった場合
 		if (slabp->inuse == 0) {
+
+			// 空きオブジェクト数がリストの制限値を超過した場合スラブのページフレームをページフレームアロケータに開放する
 			if (cachep->lists.free_objects > cachep->free_limit) {
-				cachep->lists.free_objects -= cachep->num;
-				slab_destroy(cachep, slabp);
+				cachep->lists.free_objects -= cachep->num; // 未使用オブジェクト数を減算
+				slab_destroy(cachep, slabp); // スラブを削除
+			
+			// 未使用オブジェクトだけを扱うスラブのリストに繋ぐ
 			} else {
 				list_add(&slabp->list,
 				&list3_data_ptr(cachep, objp)->slabs_free);
 			}
+		
+		// 一部のオブジェクトが使用中である場合
 		} else {
 			/* Unconditionally move a slab to the end of the
 			 * partial list on free - maximum time for the
 			 * other objects to be freed, too.
 			 */
+			// 使用されているオブジェクトを持つスラブのリストに繋ぐ
 			list_add_tail(&slabp->list,
 				&list3_data_ptr(cachep, objp)->slabs_partial);
 		}
@@ -2238,19 +2250,24 @@ static void cache_flusharray (kmem_cache_t* cachep, struct array_cache *ac)
 
 	// 共有キャッシュが存在する場合
 	if (cachep->lists.shared) {
-		struct array_cache *shared_array = cachep->lists.shared;
-		int max = shared_array->limit-shared_array->avail;
-		if (max) {
-			if (batchcount > max)
-				batchcount = max;
+		struct array_cache *shared_array = cachep->lists.shared; // 共有キャッシュを取得
+		int max = shared_array->limit-shared_array->avail; // 共有キャッシュに戻すことが可能なオブジェクト数を算出
+		if (max) { // 共有キャッシュに戻すことが可能である場合
+
+			// 一度に処理するオブジェクト数よりも共有キャッシュ内の空きが小さい場合
+			if (batchcount > max) 
+				batchcount = max; // 処理するオブジェクト数を調整
+			
+			// 共有キャッシュにローカルキャッシュ内のポインタを移動
 			memcpy(&ac_entry(shared_array)[shared_array->avail],
 					&ac_entry(ac)[0],
 					sizeof(void*)*batchcount);
-			shared_array->avail += batchcount;
-			goto free_done;
+			shared_array->avail += batchcount; // 共有キャッシュ内の利用可能オブジェクト数を更新
+			goto free_done; // 解放完了
 		}
 	}
 
+	// スラブアロケータにローカルキャッシュを返却
 	free_block(cachep, &ac_entry(ac)[0], batchcount);
 free_done:
 #if STATS
@@ -2271,8 +2288,9 @@ free_done:
 		STATS_SET_FREEABLE(cachep, i);
 	}
 #endif
-	spin_unlock(&cachep->spinlock);
-	ac->avail -= batchcount;
+	spin_unlock(&cachep->spinlock); // スピンロックの解放
+	ac->avail -= batchcount; // ローカルキャッシュの利用可能数を更新
+	// ローカルキャッシュ内の有効オブジェクトを先頭に集める
 	memmove(&ac_entry(ac)[0], &ac_entry(ac)[batchcount],
 			sizeof(void*)*ac->avail);
 }
@@ -2449,29 +2467,27 @@ EXPORT_SYMBOL(kmem_cache_alloc_node);
 
 /**
  * kmalloc - allocate memory
- * @size: how many bytes of memory are required.
- * @flags: the type of memory to allocate.
+ * @size: 何バイトのメモリが要求されているか
+ * @flags: どの種類のメモリを割り当てるか
  *
- * kmalloc is the normal method of allocating memory
- * in the kernel.
+ * kmalloc()はカーネル内でメモリ割り当てに使用する一般的なメソッドである。
  *
- * The @flags argument may be one of:
+ * @flagsはおそらく以下のいずれかが指定される
  *
- * %GFP_USER - Allocate memory on behalf of user.  May sleep.
+ * %GFP_USER - ユーザに代わって割り当てる(おそらくスリープする)
+ * %GFP_KERNEL - 通常のカーネルメモリとして割り当てる(おそらくスリープする)
+ * %GFP_ATOMIC - スリープしない。割り込みハンドラ内などで使用される
  *
- * %GFP_KERNEL - Allocate normal kernel ram.  May sleep.
- *
- * %GFP_ATOMIC - Allocation will not sleep.  Use inside interrupt handlers.
- *
- * Additionally, the %GFP_DMA flag may be set to indicate the memory
- * must be suitable for DMA.  This can mean different things on different
- * platforms.  For example, on i386, it means that the memory must come
- * from the first 16MB.
+ * 加えて"GFP_DMA"フラグはDMAに適当なメモリの指定するたえに使用される可能性がある。
+ * これは異なるプラットフォームでは異なるモノを意味する。例えばi386であればそれは
+ * 先頭16MBから来るメモリでなければならない
  */
 void * __kmalloc (size_t size, int flags)
 {
+	// 各サイズの汎用キャッシュ配列を取得
 	struct cache_sizes *csizep = malloc_sizes;
 
+	// 適切なサイズの汎用キャッシュを探す
 	for (; csizep->cs_size; csizep++) {
 		if (size > csizep->cs_size)
 			continue;
@@ -2482,6 +2498,7 @@ void * __kmalloc (size_t size, int flags)
 		 */
 		BUG_ON(csizep->cs_cachep == NULL);
 #endif
+		// DMA転送用が確認し、どのキャッシュから割り当てるかを決定する
 		return __cache_alloc(flags & GFP_DMA ?
 			 csizep->cs_dmacachep : csizep->cs_cachep, flags);
 	}
@@ -2576,24 +2593,24 @@ void *kcalloc(size_t n, size_t size, int flags)
 EXPORT_SYMBOL(kcalloc);
 
 /**
- * kfree - free previously allocated memory
- * @objp: pointer returned by kmalloc.
+ * kfree - 割り当て済みのメモリを開放する
+ * @objp: kmallocで返されたオブジェクトのポインタ
  *
- * Don't free memory not originally allocated by kmalloc()
- * or you will run into trouble.
+ * kmalloc()で割り当てられたメモリ以外を開放してはならない
  */
 void kfree (const void *objp)
 {
 	kmem_cache_t *c;
 	unsigned long flags;
 
+	// オブジェクトのポインタが存在しない
 	if (!objp)
 		return;
-	local_irq_save(flags);
+	local_irq_save(flags); // EFLAGSレジスタの値を保存し割り込みを禁止
 	kfree_debugcheck(objp);
-	c = GET_PAGE_CACHE(virt_to_page(objp));
-	__cache_free(c, (void*)objp);
-	local_irq_restore(flags);
+	c = GET_PAGE_CACHE(virt_to_page(objp)); // キャッシュディスクリプタを取得
+	__cache_free(c, (void*)objp); // オブジェクトを対応するキャッシュに返す
+	local_irq_restore(flags); // EFLAGSレジスタの値をリストア
 }
 
 EXPORT_SYMBOL(kfree);

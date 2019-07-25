@@ -5,19 +5,19 @@
 #include <asm/page.h>		/* pgprot_t */
 
 /* bits in vm_struct->flags */
-#define VM_IOREMAP	0x00000001	/* ioremap() and friends */
-#define VM_ALLOC	0x00000002	/* vmalloc() */
-#define VM_MAP		0x00000004	/* vmap()ed pages */
+#define VM_IOREMAP	0x00000001	/* ioremap()または同類関数により割り当てられたハードウェア上にあるオンボードメモリをマッピングしたメモリ領域 */
+#define VM_ALLOC	0x00000002	/* vmalloc()によって割り当てられたページ */
+#define VM_MAP		0x00000004	/* vmap()でマッピングされたページ */
 /* bits [20..32] reserved for arch specific ioremap internals */
 
 struct vm_struct {
-	void			*addr;
-	unsigned long		size;
-	unsigned long		flags;
-	struct page		**pages;
-	unsigned int		nr_pages;
-	unsigned long		phys_addr;
-	struct vm_struct	*next;
+	void			*addr; // 領域内の先頭ページフレームのリニアアドレス
+	unsigned long		size; // メモリ領域のサイズ
+	unsigned long		flags; // マッピングしているメモリの種類
+	struct page		**pages; // ページディスクリプタのポインタ配列
+	unsigned int		nr_pages; // ページディスクリプタのポインタ配列の数
+	unsigned long		phys_addr; // ハードウェアデバイスのI/O共有メモリとして使用しない場合は0
+	struct vm_struct	*next; // 次のvm_struct構造体を指すポインタ
 };
 
 /*
