@@ -860,7 +860,14 @@ void __vm_stat_account(struct mm_struct *mm, unsigned long flags,
 /*
  * The caller must hold down_write(current->mm->mmap_sem).
  */
-
+/**
+ * file: マッピング対象のファイルオブジェクト
+ * addr: 空き区画検索の開始リニアアドレス
+ * len: リニアアドレスの区画の大きさ
+ * prot: ページへのアクセス権
+ * flags: フラグ
+ * pgoff: ファイルオブジェクトのためのオフセット
+ */
 unsigned long do_mmap_pgoff(struct file * file, unsigned long addr,
 			unsigned long len, unsigned long prot,
 			unsigned long flags, unsigned long pgoff)
@@ -875,6 +882,7 @@ unsigned long do_mmap_pgoff(struct file * file, unsigned long addr,
 	int accountable = 1;
 	unsigned long charged = 0;
 
+	// ファイルマッピング
 	if (file) {
 		if (is_file_hugepages(file))
 			accountable = 0;
@@ -887,7 +895,7 @@ unsigned long do_mmap_pgoff(struct file * file, unsigned long addr,
 			return -EPERM;
 	}
 	/*
-	 * Does the application expect PROT_READ to imply PROT_EXEC?
+	 * アプリケーションはPROT_READが暗黙的にPROT_EXECを意図することを想定している？
 	 *
 	 * (the exception is when the underlying filesystem is noexec
 	 *  mounted, in which case we dont add PROT_EXEC.)
@@ -899,50 +907,62 @@ unsigned long do_mmap_pgoff(struct file * file, unsigned long addr,
 	if (!len)
 		return addr;
 
-	/* Careful about overflows.. */
+	/* カーネル空間に入ってしまう場合はエラー */
 	len = PAGE_ALIGN(len);
 	if (!len || len > TASK_SIZE)
-		return -EINVAL;
+		return -EINVAL; // 無効な引数
 
-	/* offset overflow? */
+	/* オフセットがオーバフローしていないか */
 	if ((pgoff + (len >> PAGE_SHIFT)) < pgoff)
-		return -EINVAL;
+		return -EINVAL; // 無効な引数
 
-	/* Too many mappings? */
+	/* マッピング済みのリージョンが多すぎないか */
+	/**
+	 * #define DEFAULT_MAX_MAP_COUNT	65536
+	 * int sysctl_max_map_count = DEFAULT_MAX_MAP_COUNT;
+	 */
 	if (mm->map_count > sysctl_max_map_count)
 		return -ENOMEM;
 
-	/* Obtain the address to map to. we verify (or select) it and ensure
-	 * that it represents a valid section of the address space.
+	/**
+	 * マッピングを行うアドレスを取得し
+	 * 有効なアドレス区画を指しているか確認する
 	 */
 	addr = get_unmapped_area(file, addr, len, pgoff, flags);
 	if (addr & ~PAGE_MASK)
 		return addr;
 
-	/* Do simple checking here so the lower-level routines won't have
+	/**
+	 * Do simple checking here so the lower-level routines won't have
 	 * to. we assume access permissions have been handled by the open
 	 * of the memory object, so we don't do any here.
 	 */
+	// 新たなメモリリージョンに設定するフラグ値を算出
 	vm_flags = calc_vm_prot_bits(prot) | calc_vm_flag_bits(flags) |
 			mm->def_flags | VM_MAYREAD | VM_MAYWRITE | VM_MAYEXEC;
 
+	// スワップを禁止する
 	if (flags & MAP_LOCKED) {
 		if (!can_do_mlock())
-			return -EPERM;
-		vm_flags |= VM_LOCKED;
+			return -EPERM; // 許可されていない操作
+		vm_flags |= VM_LOCKED; // メモリリージョンをロック
 	}
+
 	/* mlock MCL_FUTURE? */
-	if (vm_flags & VM_LOCKED) {
+	if (vm_flags & VM_LOCKED) { // スワップを禁止
 		unsigned long locked, lock_limit;
 		locked = mm->locked_vm << PAGE_SHIFT;
-		lock_limit = current->signal->rlim[RLIMIT_MEMLOCK].rlim_cur;
+		lock_limit = current->signal->rlim[RLIMIT_MEMLOCK].rlim_cur; // アドレス空間内でロックできるページの最大数
 		locked += len;
+		// ロックされているページ数がリソース制限値を超える若しくは適当な権限が存在しない場合
 		if (locked > lock_limit && !capable(CAP_IPC_LOCK))
-			return -EAGAIN;
+			return -EAGAIN; // 再度試みる
 	}
 
+	// ファイルをマッピングするの場合
 	inode = file ? file->f_dentry->d_inode : NULL;
 
+	// ファイルをマッピングする場合
 	if (file) {
 		switch (flags & MAP_TYPE) {
 		case MAP_SHARED:
@@ -977,10 +997,10 @@ unsigned long do_mmap_pgoff(struct file * file, unsigned long addr,
 		}
 	} else {
 		switch (flags & MAP_TYPE) {
-		case MAP_SHARED:
+		case MAP_SHARED: // 共有ページ
 			vm_flags |= VM_SHARED | VM_MAYSHARE;
 			break;
-		case MAP_PRIVATE:
+		case MAP_PRIVATE: // 共有不可ページ
 			/*
 			 * Set pgoff according to addr for anon_vma.
 			 */
@@ -991,37 +1011,44 @@ unsigned long do_mmap_pgoff(struct file * file, unsigned long addr,
 		}
 	}
 
+	// ファイルマッピング
 	error = security_file_mmap(file, prot, flags);
 	if (error)
 		return error;
 		
 	/* Clear old maps */
-	error = -ENOMEM;
+	error = -ENOMEM; // Out of memory
 munmap_back:
+	// 新たなメモリリージョンの位置を見つける(リスト及び赤黒木から)
 	vma = find_vma_prepare(mm, addr, &prev, &rb_link, &rb_parent);
+	// リージョンの存在及び新たなリージョンの開始アドレスが新しいメモリ空間の終端よりも小さいかどうか
 	if (vma && vma->vm_start < addr + len) {
 		if (do_munmap(mm, addr, len))
-			return -ENOMEM;
+			return -ENOMEM; // Out of memory
 		goto munmap_back;
 	}
 
-	/* Check against address space limit. */
+	/* アドレス空間サイズが制限値を超過していないか */
 	if ((mm->total_vm << PAGE_SHIFT) + len
 	    > current->signal->rlim[RLIMIT_AS].rlim_cur)
 		return -ENOMEM;
 
+	// 空きページフレームの確認が必要もしくはオーバーコミットを行わない設定になっている場合
 	if (accountable && (!(flags & MAP_NORESERVE) ||
 			    sysctl_overcommit_memory == OVERCOMMIT_NEVER)) {
-		if (vm_flags & VM_SHARED) {
+		if (vm_flags & VM_SHARED) { // 共有ページである場合
 			/* Check memory availability in shmem_file_setup? */
 			vm_flags |= VM_ACCOUNT;
+		
+		// 共有ページでなく書き込み可能な場合
 		} else if (vm_flags & VM_WRITE) {
 			/*
 			 * Private writable mapping: check memory availability
 			 */
 			charged = len >> PAGE_SHIFT;
+			// 十分な空きページフレームが存在しない場合
 			if (security_vm_enough_memory(charged))
-				return -ENOMEM;
+				return -ENOMEM; // Out of memory
 			vm_flags |= VM_ACCOUNT;
 		}
 	}
@@ -1031,7 +1058,9 @@ munmap_back:
 	 * The VM_SHARED test is necessary because shmem_zero_setup
 	 * will create the file object for a shared anonymous map below.
 	 */
+	// ファイルマッピングでなく且つ共有不可である場合
 	if (!file && !(vm_flags & VM_SHARED) &&
+			// 前後のメモリリージョンを結合する(可能であれば)
 	    vma_merge(mm, prev, addr, addr + len, vm_flags,
 					NULL, NULL, pgoff, NULL))
 		goto out;
@@ -1041,13 +1070,14 @@ munmap_back:
 	 * specific mapper. the address has already been validated, but
 	 * not unmapped, but the maps are removed from the list.
 	 */
+	// 新たなメモリリージョン用のメモリリージョンディスクリプタを生成
 	vma = kmem_cache_alloc(vm_area_cachep, SLAB_KERNEL);
 	if (!vma) {
 		error = -ENOMEM;
 		goto unacct_error;
 	}
-	memset(vma, 0, sizeof(*vma));
-
+	memset(vma, 0, sizeof(*vma)); // ゼロクリアし
+	// 構造体を初期化する
 	vma->vm_mm = mm;
 	vma->vm_start = addr;
 	vma->vm_end = addr + len;
@@ -1055,6 +1085,7 @@ munmap_back:
 	vma->vm_page_prot = protection_map[vm_flags & 0x0f];
 	vma->vm_pgoff = pgoff;
 
+	// ファイルマッピングである場合
 	if (file) {
 		error = -EINVAL;
 		if (vm_flags & (VM_GROWSDOWN|VM_GROWSUP))
@@ -1070,8 +1101,8 @@ munmap_back:
 		error = file->f_op->mmap(file, vma);
 		if (error)
 			goto unmap_and_free_vma;
-	} else if (vm_flags & VM_SHARED) {
-		error = shmem_zero_setup(vma);
+	} else if (vm_flags & VM_SHARED) { // ファイルマッピングでなく共有可能である場合==共有無名リージョン
+		error = shmem_zero_setup(vma); // メモリリージョンの初期化(プロセス間通信などに使用される)
 		if (error)
 			goto free_vma;
 	}
@@ -1093,10 +1124,12 @@ munmap_back:
 	pgoff = vma->vm_pgoff;
 	vm_flags = vma->vm_flags;
 
+	// ファイルマッピングでない若しくはリージョンのマージができない場合は
+	// メモリリージョンリスト及びその赤黒木を更新する
 	if (!file || !vma_merge(mm, prev, addr, vma->vm_end,
 			vma->vm_flags, NULL, file, pgoff, vma_policy(vma))) {
 		file = vma->vm_file;
-		vma_link(mm, vma, prev, rb_link, rb_parent);
+		vma_link(mm, vma, prev, rb_link, rb_parent); // リスト及び赤黒木の更新
 		if (correct_wcount)
 			atomic_inc(&inode->i_writecount);
 	} else {
@@ -1109,11 +1142,11 @@ munmap_back:
 		kmem_cache_free(vm_area_cachep, vma);
 	}
 out:	
-	mm->total_vm += len >> PAGE_SHIFT;
+	mm->total_vm += len >> PAGE_SHIFT; // プロセスのアドレス空間サイズを更新
 	__vm_stat_account(mm, vm_flags, file, len >> PAGE_SHIFT);
-	if (vm_flags & VM_LOCKED) {
-		mm->locked_vm += len >> PAGE_SHIFT;
-		make_pages_present(addr, addr + len);
+	if (vm_flags & VM_LOCKED) { // ロックされている(スワップ不可)の場合
+		mm->locked_vm += len >> PAGE_SHIFT; // スワップ不可領域のサイズを更新
+		make_pages_present(addr, addr + len); // スワップ不可になっているページをメモリ上に載せる
 	}
 	if (flags & MAP_POPULATE) {
 		up_write(&mm->mmap_sem);
@@ -1123,7 +1156,7 @@ out:
 	}
 	acct_update_integrals();
 	update_mem_hiwater();
-	return addr;
+	return addr; // メモリリージョンのリニアアドレスを返す
 
 unmap_and_free_vma:
 	if (correct_wcount)
@@ -1799,56 +1832,58 @@ int do_munmap(struct mm_struct *mm, unsigned long start, size_t len)
 	unsigned long end;
 	struct vm_area_struct *mpnt, *prev, *last;
 
+	// 解放対象のリニアアドレスがページサイズでアラインメントされているか
+	// 解放対象の開始アドレスがカーネル空間に入っていないか
+	// 解放対象のリニアアドレス空間がカーネル空間の一部でないか
 	if ((start & ~PAGE_MASK) || start > TASK_SIZE || len > TASK_SIZE-start)
-		return -EINVAL;
+		return -EINVAL; // 上記のいずれかに概要する場合はエラー
 
+	// lenをページサイズでアラインメント
 	if ((len = PAGE_ALIGN(len)) == 0)
 		return -EINVAL;
 
-	/* Find the first overlapping VMA */
+	/* 解放区間よりも後ろの終端アドレスを持っている最初のメモリリージョンを見つける */
 	mpnt = find_vma_prev(mm, start, &prev);
 	if (!mpnt)
-		return 0;
-	/* we have  start < mpnt->vm_end  */
+		return 0; // 無し
 
-	/* if it doesn't overlap, we have nothing.. */
+	/**
+	 * メモリリージョンの開始アドレスが解放区画の終端よりも大きい(後ろにある)場合
+	 * 解放対象区間とメモリリージョンが重なっていないことになる
+	 */
 	end = start + len;
-	if (mpnt->vm_start >= end)
+	if (mpnt->vm_start >= end) 
 		return 0;
 
 	/*
-	 * If we need to split any vma, do it now to save pain later.
-	 *
-	 * Note: mremap's move_vma VM_ACCOUNT handling assumes a partially
-	 * unmapped vm_area_struct will remain in use: so lower split_vma
-	 * places tmp vma above, and higher split_vma places tmp vma below.
+	 * メモリリージョンを分割する
+	 * メモリリージョン先頭に解放区間と重ならない部分がある場合
 	 */
 	if (start > mpnt->vm_start) {
 		int error = split_vma(mm, mpnt, start, 0);
 		if (error)
 			return error;
-		prev = mpnt;
+		prev = mpnt; // 分割してできた解放区間の前に位置するメモリリージョン
 	}
 
-	/* Does it split the last one? */
+	/*
+	 * メモリリージョンを分割する
+	 * メモリリージョン末尾に解放区間と重ならない部分がある場合
+	 */
 	last = find_vma(mm, end);
 	if (last && end > last->vm_start) {
 		int error = split_vma(mm, last, end, 1);
 		if (error)
 			return error;
 	}
-	mpnt = prev? prev->vm_next: mm->mmap;
+	mpnt = prev? prev->vm_next: mm->mmap; // 解放対象のメモリリージョンを更新
 
-	/*
-	 * Remove the vma's, and unmap the actual pages
-	 */
-	detach_vmas_to_be_unmapped(mm, mpnt, prev, end);
-	spin_lock(&mm->page_table_lock);
-	unmap_region(mm, mpnt, prev, start, end);
-	spin_unlock(&mm->page_table_lock);
+	detach_vmas_to_be_unmapped(mm, mpnt, prev, end); // メモリリージョンをプロセス空間から削除
+	spin_lock(&mm->page_table_lock); // ロック
+	unmap_region(mm, mpnt, prev, start, end); // リニアアドレス空間に対応するページテーブルのエントリを空に
+	spin_unlock(&mm->page_table_lock); // アンロック
 
-	/* Fix up all other VM information */
-	unmap_vma_list(mm, mpnt);
+	unmap_vma_list(mm, mpnt); // メモリリージョンディスクリプタを解放
 
 	return 0;
 }

@@ -750,13 +750,23 @@ extern unsigned long do_mmap_pgoff(struct file *file, unsigned long addr,
 	unsigned long len, unsigned long prot,
 	unsigned long flag, unsigned long pgoff);
 
+/**
+ * file: マッピング対象のファイルオブジェクト
+ * addr: 空き区画検索の開始リニアアドレス
+ * len: リニアアドレスの区画の大きさ
+ * prot: ページへのアクセス権
+ * flag: フラグ
+ * offset: ファイルオブジェクトのためのオフセット
+ */
 static inline unsigned long do_mmap(struct file *file, unsigned long addr,
 	unsigned long len, unsigned long prot,
 	unsigned long flag, unsigned long offset)
 {
 	unsigned long ret = -EINVAL;
+	// バリデーション
 	if ((offset + PAGE_ALIGN(len)) < offset)
 		goto out;
+	// offsetがページサイズ内
 	if (!(offset & ~PAGE_MASK))
 		ret = do_mmap_pgoff(file, addr, len, prot, flag, offset >> PAGE_SHIFT);
 out:

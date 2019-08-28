@@ -750,58 +750,57 @@ extern struct list_head super_blocks;
 extern spinlock_t sb_lock;
 
 #define sb_entry(list)	list_entry((list), struct super_block, s_list)
-#define S_BIAS (1<<30)
+//#define	S_BIAS	(1<<30)
+
 struct super_block {
-	struct list_head	s_list;		/* Keep this first */
-	dev_t			s_dev;		/* search index; _not_ kdev_t */
-	unsigned long		s_blocksize;
-	unsigned long		s_old_blocksize;
-	unsigned char		s_blocksize_bits;
-	unsigned char		s_dirt;
-	unsigned long long	s_maxbytes;	/* Max file size */
-	struct file_system_type	*s_type;
-	struct super_operations	*s_op;
-	struct dquot_operations	*dq_op;
- 	struct quotactl_ops	*s_qcop;
-	struct export_operations *s_export_op;
-	unsigned long		s_flags;
-	unsigned long		s_magic;
-	struct dentry		*s_root;
-	struct rw_semaphore	s_umount;
-	struct semaphore	s_lock;
-	int			s_count;
-	int			s_syncing;
-	int			s_need_sync_fs;
-	atomic_t		s_active;
-	void                    *s_security;
-	struct xattr_handler	**s_xattr;
+	struct list_head	s_list;		/* スーパーブロックリストのポインタ */
+	dev_t			s_dev;		/* デバイス番号 */
+	unsigned long		s_blocksize; /* ブロック長(バイト単位) */
+	unsigned long		s_old_blocksize; /* ブロック型デバイスドライバが通知したブロック長(バイト単位) */
+	unsigned char		s_blocksize_bits; /* ブロック長(ビットの桁数) */
+	unsigned char		s_dirt; /* 変更されたかどうかを示すフラグ */
+	unsigned long long	s_maxbytes;	/* ファイル長の最大値 */
+	struct file_system_type	*s_type; /* ファイルシステム種別へのポインタ */
+	struct super_operations	*s_op; /* スーパーブロックのメソッド */
+	struct dquot_operations	*dq_op; /* ディスククォータの操作メソッド */
+ 	struct quotactl_ops	*s_qcop; /* ディスククォータの管理メソッド */
+	struct export_operations *s_export_op; /* ネットワークファイルシステムで使用するファイルシステム公開(export)処理 */
+	unsigned long		s_flags; /* マウントフラグ */
+	unsigned long		s_magic; /* マジックナンバー */
+	struct dentry		*s_root; /* ファイルシステムのルートディレクトリ用のdエントリオブジェクト */
+	struct rw_semaphore	s_umount; /* アンマウント用のセマフォ */
+	struct semaphore	s_lock; /* スーパーブロックのセマフォ */
+	int			s_count; /* 参照カウンタ */
+	int			s_syncing; /* スーパーブロックのinode群が同期処理中であることを示すフラグ */
+	int			s_need_sync_fs; /* マウント済みファイルシステムのスーパーブロックの同期処理時に使用するフラグ */
+	atomic_t		s_active; /* 補助参照カウンタ */
+	void                    *s_security; /* スーパーブロックのセキュリティ構造体へのポインタ */
+	struct xattr_handler	**s_xattr; /* スーパーブロックの閣僚属性構造体へのポインタ */
 
-	struct list_head	s_inodes;	/* all inodes */
-	struct list_head	s_dirty;	/* dirty inodes */
-	struct list_head	s_io;		/* parked for writeback */
-	struct hlist_head	s_anon;		/* anonymous dentries for (nfs) exporting */
-	struct list_head	s_files;
+	struct list_head	s_inodes;	/* 全iノードのリスト */
+	struct list_head	s_dirty;	/* 変更されたiノードのリスト */
+	struct list_head	s_io;		/* ディスクへの書き込み待ちiノードのリスト */
+	struct hlist_head	s_anon;		/* ネットワークファイルシステム処理用の無名ディレクトリのリスト */
+	struct list_head	s_files; /* ファイルオブジェクトのリスト */
 
-	struct block_device	*s_bdev;
-	struct list_head	s_instances;
-	struct quota_info	s_dquot;	/* Diskquota specific options */
+	struct block_device	*s_bdev; /* ブロック型デバイスディスクリプタへのポインタ */
+	struct list_head	s_instances; /* 同じファイルシステム種別のスーパーブロックオブジェクトのリスト用のポインタ */
+	struct quota_info	s_dquot;	/* ディスククォータ用のディスクリプタ */
 
-	int			s_frozen;
-	wait_queue_head_t	s_wait_unfrozen;
+	int			s_frozen; /* ファイルシステムが凍結中であることを示すフラグ(強制同期のため) */
+	wait_queue_head_t	s_wait_unfrozen; /* ファイルシステムの凍結が解除されるまでプロセスを休止させるためのキュー */
 
-	char s_id[32];				/* Informational name */
+	char s_id[32];				/* スーパーブロックを格納しているブロック型デバイス名 */
 
-	void 			*s_fs_info;	/* Filesystem private info */
+	void 			*s_fs_info;	/* ファイルシステム固有のスーパーブロック情報へのポインタ */
 
 	/*
 	 * The next field is for VFS *only*. No filesystems have any business
 	 * even looking at it. You had been warned.
 	 */
-	struct semaphore s_vfs_rename_sem;	/* Kludge */
+	struct semaphore s_vfs_rename_sem;	/* ディレクトリをまたいだファイル名変更時に使用するセマフォ */
 
-	/* Granuality of c/m/atime in ns.
-	   Cannot be worse than a second */
-	u32		   s_time_gran;
+	u32		   s_time_gran /* タイムスタンプの粒度(ナノ秒単位) */;
 };
 
 extern struct timespec current_fs_time(struct super_block *sb);
