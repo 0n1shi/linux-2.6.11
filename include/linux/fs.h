@@ -424,65 +424,65 @@ static inline int mapping_writably_mapped(struct address_space *mapping)
 #endif
 
 struct inode {
-	struct hlist_node	i_hash;
-	struct list_head	i_list;
-	struct list_head	i_sb_list;
-	struct list_head	i_dentry;
-	unsigned long		i_ino;
-	atomic_t		i_count;
-	umode_t			i_mode;
-	unsigned int		i_nlink;
-	uid_t			i_uid;
-	gid_t			i_gid;
-	dev_t			i_rdev;
-	loff_t			i_size;
-	struct timespec		i_atime;
-	struct timespec		i_mtime;
-	struct timespec		i_ctime;
-	unsigned int		i_blkbits;
-	unsigned long		i_blksize;
-	unsigned long		i_version;
-	unsigned long		i_blocks;
-	unsigned short          i_bytes;
-	unsigned char		i_sock;
-	spinlock_t		i_lock;	/* i_blocks, i_bytes, maybe i_size */
-	struct semaphore	i_sem;
-	struct rw_semaphore	i_alloc_sem;
-	struct inode_operations	*i_op;
-	struct file_operations	*i_fop;	/* former ->i_op->default_file_ops */
-	struct super_block	*i_sb;
-	struct file_lock	*i_flock;
-	struct address_space	*i_mapping;
-	struct address_space	i_data;
+	struct hlist_node	i_hash; /* ハッシュリスト用のポインタ */
+	struct list_head	i_list; /* iノードの現在の状態を表すリスト用のポインタ */
+	struct list_head	i_sb_list; /* スーパーブロックのiノードリスト用のポインタ */
+	struct list_head	i_dentry; /* iノードの参照するdエントリオブジェクトリストの先頭 */
+	unsigned long		i_ino; /* iノード番号 */
+	atomic_t		i_count; /* 利用カウンタ */
+	umode_t			i_mode; /* ファイル種別とアクセス権 */
+	unsigned int		i_nlink; /* ハードリンク数 */
+	uid_t			i_uid; /* ユーザID */
+	gid_t			i_gid; /* グループID */
+	dev_t			i_rdev; /* 実デバイス番号 */
+	loff_t			i_size; /* ファイル長(単位: バイト) */
+	struct timespec		i_atime; /* 最終アクセス時刻 */
+	struct timespec		i_mtime; /* 最終書き込み時刻 */
+	struct timespec		i_ctime; /* 最終更新時刻 */
+	unsigned int		i_blkbits; /* ブロックサイズ(単位: ビット数) */
+	unsigned long		i_blksize; /* ブロックサイズ(単位: バイト) */
+	unsigned long		i_version; /* バージョン番号、inode使用時に自動的にインクリメントされる */
+	unsigned long		i_blocks; /* ファイルのブロック数 */
+	unsigned short          i_bytes; /* ファイルの最終ブロックのバイト数 */
+	unsigned char		i_sock; /* このファイルがソケットであれば0以外の値を持つ */
+	spinlock_t		i_lock;	/* iノードのスピンロック */
+	struct semaphore	i_sem; /* iノードアクセス用のセマフォ */
+	struct rw_semaphore	i_alloc_sem; /* direct I/O用のセマフォ */
+	struct inode_operations	*i_op; /* iノードの操作用のメソッド群 */
+	struct file_operations	*i_fop;	/* 初期のファイル操作用のメソッド群 */
+	struct super_block	*i_sb; /* スーパーブロックオブジェクトへのポインタ */
+	struct file_lock	*i_flock; /* ファイルロックリストへのポインタ */
+	struct address_space	*i_mapping; /* アドレス空間オブジェクトへのポインタ */
+	struct address_space	i_data; /* このファイルのアドレス空間オブジェクト */
 #ifdef CONFIG_QUOTA
-	struct dquot		*i_dquot[MAXQUOTAS];
+	struct dquot		*i_dquot[MAXQUOTAS]; /* ノードディスククォータ */
 #endif
 	/* These three should probably be a union */
-	struct list_head	i_devices;
-	struct pipe_inode_info	*i_pipe;
-	struct block_device	*i_bdev;
-	struct cdev		*i_cdev;
-	int			i_cindex;
+	struct list_head	i_devices; /* キャラクタ型又はブロック型デバイスファイルに関連するiノードリストへのポインタ */
+	struct pipe_inode_info	*i_pipe; /* ファイルがパイプである場合に使用 */
+	struct block_device	*i_bdev; /* ブロック型デバイスドライバへのポインタ */
+	struct cdev		*i_cdev; /* キャラクタ型デバイスドライバへのポインタ */
+	int			i_cindex; /* マイナー番号グループ内のデバイスファイルのインデックス */
 
-	__u32			i_generation;
+	__u32			i_generation; /* iノードのバージョン番号 */
 
 #ifdef CONFIG_DNOTIFY
-	unsigned long		i_dnotify_mask; /* Directory notify events */
-	struct dnotify_struct	*i_dnotify; /* for directory notifications */
+	unsigned long		i_dnotify_mask; /* ディレクトリ通知イベント用のマスク */
+	struct dnotify_struct	*i_dnotify; /* ディレクトリ通知に使用 */
 #endif
 
-	unsigned long		i_state;
-	unsigned long		dirtied_when;	/* jiffies of first dirtying */
+	unsigned long		i_state; /* iノード状態のフラグ */
+	unsigned long		dirtied_when;	/* ノードがdirtyになった時刻(単位: tick) */
 
-	unsigned int		i_flags;
+	unsigned int		i_flags; /* ファイルシステムのマウントフラグ */
 
-	atomic_t		i_writecount;
-	void			*i_security;
+	atomic_t		i_writecount; /* 書き込みプロセス用の利用カウンタ */
+	void			*i_security; /* iノードのセキュリティ構造体へのポインタ */
 	union {
-		void		*generic_ip;
+		void		*generic_ip; /* 固有データへのポインタ */
 	} u;
 #ifdef __NEED_I_SIZE_ORDERED
-	seqcount_t		i_size_seqcount;
+	seqcount_t		i_size_seqcount; /* SMPシステムでi_sizeの整合性を取るための順次カウンタ */
 #endif
 };
 
@@ -746,8 +746,9 @@ extern int send_sigurg(struct fown_struct *fown);
 #define MNT_DETACH	0x00000002	/* Just detach from the tree */
 #define MNT_EXPIRE	0x00000004	/* Mark for expiry */
 
+/* システム上の全てのスーパーブロックオブジェクトの双方向リストの先頭 */
 extern struct list_head super_blocks;
-extern spinlock_t sb_lock;
+extern spinlock_t sb_lock; // 上記のリストのためのロック変数
 
 #define sb_entry(list)	list_entry((list), struct super_block, s_list)
 //#define	S_BIAS	(1<<30)
@@ -789,15 +790,13 @@ struct super_block {
 
 	int			s_frozen; /* ファイルシステムが凍結中であることを示すフラグ(強制同期のため) */
 	wait_queue_head_t	s_wait_unfrozen; /* ファイルシステムの凍結が解除されるまでプロセスを休止させるためのキュー */
+	/* ここでいう”凍結”は書き込みのできない状態にするということ */
 
 	char s_id[32];				/* スーパーブロックを格納しているブロック型デバイス名 */
 
 	void 			*s_fs_info;	/* ファイルシステム固有のスーパーブロック情報へのポインタ */
+	/* s_fs_infoがiノードやブロックのビットマップなどを保持する */
 
-	/*
-	 * The next field is for VFS *only*. No filesystems have any business
-	 * even looking at it. You had been warned.
-	 */
 	struct semaphore s_vfs_rename_sem;	/* ディレクトリをまたいだファイル名変更時に使用するセマフォ */
 
 	u32		   s_time_gran /* タイムスタンプの粒度(ナノ秒単位) */;
@@ -949,7 +948,10 @@ struct file_operations {
 };
 
 struct inode_operations {
+	/* ディレクトリ(dir)内のdエントリオブジェクト(dentry)に対応する通常ファイル用に新たなiノードを作成する */
 	int (*create) (struct inode *,struct dentry *,int, struct nameidata *);
+
+	/* ディレクトリ(dir)を検索し、dエントリオブジェクト(dentry)に含まれるファイル名に対応するiノードを見つける */
 	struct dentry * (*lookup) (struct inode *,struct dentry *, struct nameidata *);
 	int (*link) (struct dentry *,struct inode *,struct dentry *);
 	int (*unlink) (struct inode *,struct dentry *);
@@ -986,41 +988,78 @@ extern ssize_t vfs_writev(struct file *, const struct iovec __user *,
  * without the big kernel lock held in all filesystems.
  */
 struct super_operations {
-   	struct inode *(*alloc_inode)(struct super_block *sb);
-	void (*destroy_inode)(struct inode *);
+	/* iノードオブジェクト領域を割り当てる(iノードにはファイルシステム固有のデータも含まれる)*/
+  struct inode *(*alloc_inode)(struct super_block *sb);
 
+	/* iノードオブジェクト領域の破棄する */
+	void (*destroy_inode)(struct inode *); 
+
+	/* iノードオブジェクトのアドレスを受け取り、ディスク上のデータを基にそのiノードオブジェクトを初期化する */
 	void (*read_inode) (struct inode *);
-  
-   	void (*dirty_inode) (struct inode *);
+
+	/* iノードがdirtyである時に呼び出される。ジャーナル機能のあるファイルシステムで使用される */
+  void (*dirty_inode) (struct inode *);
+
+	 /* ファイルシステム上のiノードを引数のiノードオブジェクトで更新する */
 	int (*write_inode) (struct inode *, int);
+
+	/* iノードを開放する時に呼び出され、参照カウンタをデクリメントしファイルシステム固有の処理を行う */
 	void (*put_inode) (struct inode *);
+
+	/* iノードが破棄される時、参照カウンタが0になる時に呼び出され、ファイルシステムからそのiノードを開放する */
 	void (*drop_inode) (struct inode *);
-	void (*delete_inode) (struct inode *);
+
+	/* iノードを破棄する時に呼び出され、VFS及びディスク上両方のファイルデータ及びメタデータを削除する */
+	void (*delete_inode) (struct inode *); 
+
+	/* スーパーブロックオブジェクトのアドレスを受け取り、解放する(ファイルシステムがアンマウントされたため) */
 	void (*put_super) (struct super_block *);
+
+	/* 指定したスーパーブロックオブジェクトの内容でファイルシステムのスーパーブロックを更新する */
 	void (*write_super) (struct super_block *);
+
+	/* ファイルシステムのデータ構造をディスクに書き戻し更新する */
 	int (*sync_fs)(struct super_block *sb, int wait);
+
+	/* ファイルシステムの変更を禁止し、指定したスーパーブロックオブジェクトの内容でスーパーブロックを更新する(LVMが使用する) */
 	void (*write_super_lockfs) (struct super_block *);
+
+	/* ファイルシステムの変更禁止を解除する */
 	void (*unlockfs) (struct super_block *);
+
+	/* ファイルシステムの統計情報をバッファに入れて返す */
 	int (*statfs) (struct super_block *, struct kstatfs *);
-	int (*remount_fs) (struct super_block *, int *, char *);
+
+	/* 新しいオプションでファイルシステムを再マウントする(マウントオブション変更時など) */
+	int (*remount_fs) (struct super_block *, int *, char *); 
+
+	/* ディスクのiノードを破棄する場合に呼び出す */
 	void (*clear_inode) (struct inode *);
+
+	/* アンマウント操作が開始された(マウント操作の中断) */
 	void (*umount_begin) (struct super_block *);
 
+	/* ファイルシステム固有のオブションを表示する */
 	int (*show_options)(struct seq_file *, struct vfsmount *);
 
+	/* クォータシステムで使用されファイルシステムの制限値を管理するファイルからデータを読み出す */
 	ssize_t (*quota_read)(struct super_block *, int, char *, size_t, loff_t);
+
+	/* クォータシステムで使用されファイルシステムの制限値を管理するファイルにデータを書き込む */
 	ssize_t (*quota_write)(struct super_block *, int, const char *, size_t, loff_t);
 };
 
 /* Inode state bits.  Protected by inode_lock. */
+/* iノードがdirtyな状態(ディスク上のデータと異なる状態) */
 #define I_DIRTY_SYNC		1 /* Not dirty enough for O_DATASYNC */
 #define I_DIRTY_DATASYNC	2 /* Data-related inode changes pending */
 #define I_DIRTY_PAGES		4 /* Data-related inode changes pending */
+
 #define __I_LOCK		3
-#define I_LOCK			(1 << __I_LOCK)
-#define I_FREEING		16
-#define I_CLEAR			32
-#define I_NEW			64
+#define I_LOCK			(1 << __I_LOCK) // I/O転送処理中
+#define I_FREEING		16 // 解放処理中
+#define I_CLEAR			32 // 無効
+#define I_NEW			64 // 初期化前
 
 #define I_DIRTY (I_DIRTY_SYNC | I_DIRTY_DATASYNC | I_DIRTY_PAGES)
 
