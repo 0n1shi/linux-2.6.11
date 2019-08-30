@@ -953,24 +953,60 @@ struct inode_operations {
 
 	/* ディレクトリ(dir)を検索し、dエントリオブジェクト(dentry)に含まれるファイル名に対応するiノードを見つける */
 	struct dentry * (*lookup) (struct inode *,struct dentry *, struct nameidata *);
+
+	/* ファイルを参照する新しいハードリンクをディレクトリ内に作成する。 */
 	int (*link) (struct dentry *,struct inode *,struct dentry *);
+
+	/* ディレクトリ内からハードリンクを削除する */
 	int (*unlink) (struct inode *,struct dentry *);
+
+	/* ディレクトリ内にハードリンクに対応するシンボリックリンクを作成する */
 	int (*symlink) (struct inode *,struct dentry *,const char *);
+
+	/* ディレクトリ内に指定されたディレクトリを作成する */
 	int (*mkdir) (struct inode *,struct dentry *,int);
+
+	/* サブディレクトリをディレクトリ内から削除する */
 	int (*rmdir) (struct inode *,struct dentry *);
+
+	/* ディレクトリ内に特殊ファイル用のiノードをディスク上に作成する */
 	int (*mknod) (struct inode *,struct dentry *,int,dev_t);
+
+	/* 指定のファイル情報を指定のdエントリに移す */
 	int (*rename) (struct inode *, struct dentry *,
 			struct inode *, struct dentry *);
+
+	/* バッファに指定のシンボリックリンクのパスを書き込む */
 	int (*readlink) (struct dentry *, char __user *,int);
+
+	/* iノードオブジェクトで指定するシンボリックリンクを解釈する */
 	int (*follow_link) (struct dentry *, struct nameidata *);
+
+	/*  follow_linkによって確保されたデータ構造を開放する */
 	void (*put_link) (struct dentry *, struct nameidata *);
+
+	/* inodeに対応するファイルサイズを変更する */
 	void (*truncate) (struct inode *);
+
+	/* 指定の権限がinodeで許可されているかを調べる */
 	int (*permission) (struct inode *, int, struct nameidata *);
+
+	/* iノード促成の変更があったことを通知 */
 	int (*setattr) (struct dentry *, struct iattr *);
+
+	/* iノード属性を読み込む */
 	int (*getattr) (struct vfsmount *mnt, struct dentry *, struct kstat *);
+
+	/* iノードの拡張属性を設定する */
 	int (*setxattr) (struct dentry *, const char *,const void *,size_t,int);
+
+	/* iノードの拡張属性を取得する */
 	ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
+
+	/* 拡張属性を表す名前リストを取得 */
 	ssize_t (*listxattr) (struct dentry *, char *, size_t);
+
+	/* iノードの拡張属性を削除する */
 	int (*removexattr) (struct dentry *, const char *);
 };
 
