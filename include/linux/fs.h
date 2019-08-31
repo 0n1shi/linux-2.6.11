@@ -574,32 +574,32 @@ struct file_ra_state {
 #define RA_FLAG_INCACHE 0x02	/* file is already in cache */
 
 struct file {
-	struct list_head	f_list;
-	struct dentry		*f_dentry;
-	struct vfsmount         *f_vfsmnt;
-	struct file_operations	*f_op;
-	atomic_t		f_count;
-	unsigned int 		f_flags;
-	mode_t			f_mode;
-	int			f_error;
-	loff_t			f_pos;
-	struct fown_struct	f_owner;
-	unsigned int		f_uid, f_gid;
-	struct file_ra_state	f_ra;
+	struct list_head	f_list; // ファイルオブジェクトの汎用的なリスト用のポインタ
+	struct dentry		*f_dentry; // オープン時に利用したファイル名を保持するdエントリ
+	struct vfsmount         *f_vfsmnt; // そのファイルを扱うファイルシステムへのポインタ
+	struct file_operations	*f_op; // ファイル操作用のメソッドを保持する構造体へのポインタ
+	atomic_t		f_count; // ファイルオブジェクトへの参照ポインタ
+	unsigned int 		f_flags; // ファイルのオープン時に指定されたフラグ
+	mode_t			f_mode; // プロセスのアクセスモード
+	int			f_error; // ネットワーク経由の書き込み時に発生したエラー番号
+	loff_t			f_pos; // 現在のファイルオフセット
+	struct fown_struct	f_owner; // シグナル経由のI/Oイベント通知用データ
+	unsigned int		f_uid, f_gid; // ユーザID、グループID
+	struct file_ra_state	f_ra; // ファイルの先読み状態
 
-	size_t			f_maxcount;
-	unsigned long		f_version;
-	void			*f_security;
+	size_t			f_maxcount; // 一度の処理で書き込み可能な最大バイト数
+	unsigned long		f_version; // バージョン番号(アクセス時に自動インクリメント)
+	void			*f_security; // ファイルオブジェクトのセキュリティ構造体へのポインタ
 
 	/* needed for tty driver, and maybe others */
-	void			*private_data;
+	void			*private_data; // ファイルシステムやデバイスドライバの固有データへのポインタ
 
 #ifdef CONFIG_EPOLL
 	/* Used by fs/eventpoll.c to link all the hooks to this file */
-	struct list_head	f_ep_links;
-	spinlock_t		f_ep_lock;
+	struct list_head	f_ep_links; // このファイル用のイベントポール待ちリストの先頭
+	spinlock_t		f_ep_lock; // f_ep_linksのためのスピンロック
 #endif /* #ifdef CONFIG_EPOLL */
-	struct address_space	*f_mapping;
+	struct address_space	*f_mapping; // ファイルのアドレス空間オブジェクトへのポインタ
 };
 extern spinlock_t files_lock;
 #define file_list_lock() spin_lock(&files_lock);
@@ -919,19 +919,47 @@ typedef int (*read_actor_t)(read_descriptor_t *, struct page *, unsigned long, u
  */
 struct file_operations {
 	struct module *owner;
+
+	/* ファイルポインタ(オフセット)の更新 */
 	loff_t (*llseek) (struct file *, loff_t, int);
+
+	/* ファイルポインタを基点に指定オフセットから指定サイズ分のデータを読み込み、ユーザ空間のバッファに格納し、読み込んだサイズ分オフセットを更新する */
 	ssize_t (*read) (struct file *, char __user *, size_t, loff_t *);
+
+	/* 非同期に読み込みを行う */
 	ssize_t (*aio_read) (struct kiocb *, char __user *, size_t, loff_t);
+
+	/* ファイルポインタを基点に指定オフセットから指定サイズ分のデータを書き込み、ユーザ空間のバッファに格納し、書き込んだサイズ分オフセットを更新する */
 	ssize_t (*write) (struct file *, const char __user *, size_t, loff_t *);
+
+	/* 非同期に書き込みを行う */
 	ssize_t (*aio_write) (struct kiocb *, const char __user *, size_t, loff_t);
+
+	/* ディレクトリの次のエントリを返す */
 	int (*readdir) (struct file *, void *, filldir_t);
+
+	/* ファイルの変更が行われるまで待機する */
 	unsigned int (*poll) (struct file *, struct poll_table_struct *);
+
+	/*  特殊な処理を行うための関数(主にデバイス周りで使用される) */
 	int (*ioctl) (struct inode *, struct file *, unsigned int, unsigned long);
+
+	/* グローバルカーネルロックを使用しない"ioctl" */
 	long (*unlocked_ioctl) (struct file *, unsigned int, unsigned long);
+
+	/* 64bitの環境で32bitのioctlを使用するためのもの */
 	long (*compat_ioctl) (struct file *, unsigned int, unsigned long);
+
+	/* プロセスのアドレス空間にメモリマッピングを行う */
 	int (*mmap) (struct file *, struct vm_area_struct *);
+
+	/* ファイルオブジェクトを生成し対応するiノードオブジェクトとリンクする */
 	int (*open) (struct inode *, struct file *);
+
+	/* オープン中のファイルがクローズされた時に呼び出される(処理の詳細はファイルシステムに依存する) */
 	int (*flush) (struct file *);
+
+	/* ファイルオブジェクトを開放する(f_countメンバが0になった時) */
 	int (*release) (struct inode *, struct file *);
 	int (*fsync) (struct file *, struct dentry *, int datasync);
 	int (*aio_fsync) (struct kiocb *, int datasync);
