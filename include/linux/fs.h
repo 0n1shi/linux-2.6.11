@@ -961,17 +961,41 @@ struct file_operations {
 
 	/* ファイルオブジェクトを開放する(f_countメンバが0になった時) */
 	int (*release) (struct inode *, struct file *);
+
+	/* メモリにキャッシュされているデータをディスクに書き戻す */
 	int (*fsync) (struct file *, struct dentry *, int datasync);
+
+	/* 非同期でキャッシュされているメモリのデータをディスクに書き戻す */
 	int (*aio_fsync) (struct kiocb *, int datasync);
+
+	/* シグナルで受け取るI/Oイベントの通知を許可または禁止する */
 	int (*fasync) (int, struct file *, int);
+
+	/* ファイルをロックする */
 	int (*lock) (struct file *, int, struct file_lock *);
+
+	/*  ファイルからデータを読み込みバッファに格納する */
 	ssize_t (*readv) (struct file *, const struct iovec *, unsigned long, loff_t *);
+
+	/* バッファからデータをファイルに書き込む */
 	ssize_t (*writev) (struct file *, const struct iovec *, unsigned long, loff_t *);
+
+	/* データを転送する */
 	ssize_t (*sendfile) (struct file *, loff_t *, size_t, read_actor_t, void *);
+	
+	/* ページキャッシュにあるファイルデータを転送する(ネットワークで使用される) */
 	ssize_t (*sendpage) (struct file *, struct page *, int, size_t, loff_t *, int);
+
+	/* ファイルにマッピングするための未使用アドレス範囲を取得する */
 	unsigned long (*get_unmapped_area)(struct file *, unsigned long, unsigned long, unsigned long, unsigned long);
+	
+	/* fcntlシステムコールが呼び出す、NFSが使用 */
 	int (*check_flags)(int);
+	
+	/* fcntlシステムコールが呼び出す(ディレクトリの変更通知を設定する)、CIFSが使用 */
 	int (*dir_notify)(struct file *filp, unsigned long arg);
+
+	/* flockシステムコールの振る舞いを変更する */
 	int (*flock) (struct file *, int, struct file_lock *);
 };
 

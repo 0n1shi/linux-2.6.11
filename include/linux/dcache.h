@@ -81,39 +81,49 @@ struct dcookie_struct;
 #define DNAME_INLINE_LEN_MIN 36
 
 struct dentry {
-	atomic_t d_count;
-	unsigned int d_flags;		/* protected by d_lock */
-	spinlock_t d_lock;		/* per dentry lock */
-	struct inode *d_inode;		/* Where the name belongs to - NULL is
-					 * negative */
+	atomic_t d_count; /* dエントリの参照カウンタ */
+	unsigned int d_flags;		/* フラグ */
+	spinlock_t d_lock;		/* エントリ用のスピンロック */
+	struct inode *d_inode;		/* dエントリに対応するiノード */
 	/*
 	 * The next three fields are touched by __d_lookup.  Place them here
 	 * so they all fit in a 16-byte range, with 16-byte alignment.
 	 */
-	struct dentry *d_parent;	/* parent directory */
-	struct qstr d_name;
+	struct dentry *d_parent;	/* 親ディレクトリのdエントリ */
+	struct qstr d_name; /* ファイル名 */
 
-	struct list_head d_lru;		/* LRU list */
-	struct list_head d_child;	/* child of parent list */
-	struct list_head d_subdirs;	/* our children */
-	struct list_head d_alias;	/* inode alias list */
-	unsigned long d_time;		/* used by d_revalidate */
-	struct dentry_operations *d_op;
-	struct super_block *d_sb;	/* The root of the dentry tree */
-	void *d_fsdata;			/* fs-specific data */
- 	struct rcu_head d_rcu;
-	struct dcookie_struct *d_cookie; /* cookie, if any */
-	struct hlist_node d_hash;	/* lookup hash list */	
-	int d_mounted;
-	unsigned char d_iname[DNAME_INLINE_LEN_MIN];	/* small names */
+	struct list_head d_lru;		/* 未使用ディレクトリリスト(LRU) */
+	struct list_head d_child;	/* 同一のdエントリを親として持つ子のリスト */
+	struct list_head d_subdirs;	/* このdエントリに対応するディレクトリ内にあるdエントリ */
+	struct list_head d_alias;	/* 同じiノードを共有するeエントリのリスト */
+	unsigned long d_time;		/* d_revalidate関数によって使用される */
+	struct dentry_operations *d_op; /* dエントリのメソッド群 */
+	struct super_block *d_sb;	/* ファイルのスーパーオブジェクト */
+	void *d_fsdata;			/* ファイルシステム固有のデータ */
+ 	struct rcu_head d_rcu; /* rエントリオブジェクトの回収時に使用するRCUディスクリプタ */
+	struct dcookie_struct *d_cookie; /* プロファイラが使用するデータ構造へのポインタ */
+	struct hlist_node d_hash;	/* ハッシュテーブルエントリ中のリストへのポインタ */	
+	int d_mounted; /* dエントリにマウントしたファイルシステム数のカウンタ */
+	unsigned char d_iname[DNAME_INLINE_LEN_MIN];	/* 短いファイル名を格納する領域 */
 };
 
 struct dentry_operations {
+	/* ファイルのパス名変換時にdエントリが有効化どうかを確認する(デフォルトはNULLでネットワークファイルシステムでは特定の処理が設定されていることがある) */
 	int (*d_revalidate)(struct dentry *, struct nameidata *);
+
+	/* dエントリハッシュテーブルで使用されるファイルシステム独自のハッシュ関数。 */
 	int (*d_hash) (struct dentry *, struct qstr *);
+
+	/* 2つのファイル名を比較する(デフォルトでは文字列比較) */
 	int (*d_compare) (struct dentry *, struct qstr *, struct qstr *);
+
+	/* dエントリオブジェクトの参照数が0になった際に呼び出される(デフォルトでは何もしない) */
 	int (*d_delete)(struct dentry *);
+
+	/* dエントリオブジェクトが開放される時に呼び出される(デフォルトでは何もしない) */
 	void (*d_release)(struct dentry *);
+
+	/* dエントリオブジェクトが”負”の状態になった時に呼び出される(デフォルトではiノードオブジェクトを開放する"iput()"が呼び出される) */
 	void (*d_iput)(struct dentry *, struct inode *);
 };
 
