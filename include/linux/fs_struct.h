@@ -5,10 +5,13 @@ struct dentry;
 struct vfsmount;
 
 struct fs_struct {
-	atomic_t count;
-	rwlock_t lock;
-	int umask;
+	atomic_t count; // 共有するプロセス数
+	rwlock_t lock; // 読み書きスピンロック
+	int umask; // ファイル権限のためのビットマスク
+
+	// ルートディレクトリ、ワーキングディレクトリのdエントリ
 	struct dentry * root, * pwd, * altroot;
+	// ルートディレクトリ、ワーキングディレクトリのファイルシステムオブジェクト
 	struct vfsmount * rootmnt, * pwdmnt, * altrootmnt;
 };
 
