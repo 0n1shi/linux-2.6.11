@@ -6,10 +6,10 @@
 #include <linux/sched.h>
 
 struct namespace {
-	atomic_t		count;
-	struct vfsmount *	root;
-	struct list_head	list;
-	struct rw_semaphore	sem;
+	atomic_t		count; /* 参照カウンタ */
+	struct vfsmount *	root; /* この名前空間のルートファイルシステムディスクリプタ */
+	struct list_head	list; /* マウント済みの全てのファイルシステムディスクリプタリストの先頭 */
+	struct rw_semaphore	sem; /* この構造体を保護するための読み書きセマフォ */
 };
 
 extern void umount_tree(struct vfsmount *);

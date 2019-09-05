@@ -16,26 +16,26 @@
 #include <linux/spinlock.h>
 #include <asm/atomic.h>
 
-#define MNT_NOSUID	1
-#define MNT_NODEV	2
-#define MNT_NOEXEC	4
+#define MNT_NOSUID	1 /* setuid及びsetgidを禁止 */
+#define MNT_NODEV	2 /* デバイスファイルへのアクセスを禁止 */
+#define MNT_NOEXEC	4 /* プログラム */
 
 struct vfsmount
 {
-	struct list_head mnt_hash;
-	struct vfsmount *mnt_parent;	/* fs we are mounted on */
-	struct dentry *mnt_mountpoint;	/* dentry of mountpoint */
-	struct dentry *mnt_root;	/* root of the mounted tree */
-	struct super_block *mnt_sb;	/* pointer to superblock */
-	struct list_head mnt_mounts;	/* list of children, anchored here */
-	struct list_head mnt_child;	/* and going through their mnt_child */
-	atomic_t mnt_count;
-	int mnt_flags;
-	int mnt_expiry_mark;		/* true if marked for expiry */
-	char *mnt_devname;		/* Name of device e.g. /dev/dsk/hda1 */
-	struct list_head mnt_list;
-	struct list_head mnt_fslink;	/* link in fs-specific expiry list */
-	struct namespace *mnt_namespace; /* containing namespace */
+	struct list_head mnt_hash; /* ハッシュテーブルリスト用のポインタ */
+	struct vfsmount *mnt_parent;	/* マウントされる親ファイルシステムへのポインタ */
+	struct dentry *mnt_mountpoint;	/* マウントポイントのdエントリ */
+	struct dentry *mnt_root;	/* マウントするファイルシステムのルートディレクトリに対応するdエントリ */
+	struct super_block *mnt_sb;	/* マウントするファイルシステムのスーパーブロックオブジェクト */
+	struct list_head mnt_mounts;	/* マウントするファイルシステムの全てのファイルシステムディスクリプタリストの先頭 */
+	struct list_head mnt_child;	/* マウント済みファイルシステムディスクリプタのmnt_mountsリストへのポインタ */
+	atomic_t mnt_count; /* 利用カウンタ(ファイルシステムのアンマウントをきんしするために増加させる) */
+	int mnt_flags; /* フラグ */
+	int mnt_expiry_mark; /* ファイルシステムが有効期限切れかどうか */
+	char *mnt_devname;		/* デバイスファイル名 */
+	struct list_head mnt_list; /* マウント済みのファイルシステムディスクリプタの名前空間リストへのポインタ */
+	struct list_head mnt_fslink;	/* ファイルシステム固有の期限管理リストのポインタ */
+	struct namespace *mnt_namespace; /* ファイルシステムをマウントしたプロセスの名前空間へのポインタ */
 };
 
 static inline struct vfsmount *mntget(struct vfsmount *mnt)

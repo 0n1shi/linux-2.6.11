@@ -15,7 +15,7 @@
  *  Added kerneld support: Jacques Gelinas and Bjorn Ekwall
  *  Added change_root: Werner Almesberger & Hans Lermen, Feb '96
  *  Added options to /proc/mounts:
- *    Torbj�rn Lindh (torbjorn.lindh@gopta.se), April 14, 1996.
+ *    Torbj�rn Lindh (torbjorn.lindh@gopta.se), April 14, 1996.
  *  Added devfs support: Richard Gooch <rgooch@atnf.csiro.au>, 13-JAN-1998
  *  Heavily rewritten for 'one fs - one tree' dcache architecture. AV, Mar 2000
  */
@@ -796,26 +796,30 @@ EXPORT_SYMBOL(get_sb_single);
 struct vfsmount *
 do_kern_mount(const char *fstype, int flags, const char *name, void *data)
 {
-	struct file_system_type *type = get_fs_type(fstype);
+	struct file_system_type *type = get_fs_type(fstype); // ファイルシステム名から対応するfile_system_typeディスクリプタを取得
 	struct super_block *sb = ERR_PTR(-ENOMEM);
 	struct vfsmount *mnt;
 	int error;
 	char *secdata = NULL;
 
+	// ファイルシステムの樹別が指定されていない
 	if (!type)
 		return ERR_PTR(-ENODEV);
 
+	// ファイルシステムディスクリプタを初期化(各リストや参照カウンタ、デバイス名など)
 	mnt = alloc_vfsmnt(name);
 	if (!mnt)
 		goto out;
-
+	
+	// 渡すデータがある場合
 	if (data) {
-		secdata = alloc_secdata();
+		secdata = alloc_secdata(); // 0クリアされたページを確保
 		if (!secdata) {
 			sb = ERR_PTR(-ENOMEM);
 			goto out_mnt;
 		}
 
+		// データをコピー
 		error = security_sb_copy_data(type, data, secdata);
 		if (error) {
 			sb = ERR_PTR(error);
@@ -823,20 +827,23 @@ do_kern_mount(const char *fstype, int flags, const char *name, void *data)
 		}
 	}
 
+	// 初期化したスーパーブロックオブジェクトを取得
 	sb = type->get_sb(type, flags, name, data);
 	if (IS_ERR(sb))
 		goto out_free_secdata;
  	error = security_sb_kern_mount(sb, secdata);
  	if (error)
  		goto out_sb;
+	// マウント情報を初期化していく
 	mnt->mnt_sb = sb;
 	mnt->mnt_root = dget(sb->s_root);
 	mnt->mnt_mountpoint = sb->s_root;
 	mnt->mnt_parent = mnt;
 	mnt->mnt_namespace = current->namespace;
-	up_write(&sb->s_umount);
+	up_write(&sb->s_umount); // スーパーブロックオブジェクトの解放
 	put_filesystem(type);
 	return mnt;
+// エラー処理
 out_sb:
 	up_write(&sb->s_umount);
 	deactivate_super(sb);

@@ -768,14 +768,16 @@ static int do_new_mount(struct nameidata *nd, char *type, int flags,
 	if (!type || !memchr(type, 0, PAGE_SIZE))
 		return -EINVAL;
 
-	/* we need capabilities... */
+	/* ルート権限が必要 */
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
 
+	// 実際のマウント処理
 	mnt = do_kern_mount(type, flags, name, data);
 	if (IS_ERR(mnt))
 		return PTR_ERR(mnt);
 
+	// 名前空間のファイルシステムツリーにマウントしたファイルシステムを追加する
 	return do_add_mount(mnt, nd, mnt_flags, NULL);
 }
 
@@ -788,24 +790,29 @@ int do_add_mount(struct vfsmount *newmnt, struct nameidata *nd,
 {
 	int err;
 
+	// 読み書きセマフォ
 	down_write(&current->namespace->sem);
 	/* Something was mounted here while we slept */
 	while(d_mountpoint(nd->dentry) && follow_down(&nd->mnt, &nd->dentry))
 		;
+
+	
 	err = -EINVAL;
 	if (!check_mnt(nd->mnt))
 		goto unlock;
 
-	/* Refuse the same filesystem on the same mount point */
+	/* 同じファイルシステムを同じマウントポイントにマウントさせない */
 	err = -EBUSY;
 	if (nd->mnt->mnt_sb == newmnt->mnt_sb &&
 	    nd->mnt->mnt_root == nd->dentry)
 		goto unlock;
 
+	// シンボリックリンクの場合
 	err = -EINVAL;
 	if (S_ISLNK(newmnt->mnt_root->d_inode->i_mode))
 		goto unlock;
 
+	// マウントフラグをコピー
 	newmnt->mnt_flags = mnt_flags;
 	err = graft_tree(newmnt, nd);
 
@@ -958,6 +965,7 @@ exact_copy_from_user(void *to, const void __user *from, unsigned long n)
 	return n;
 }
 
+// ユーザ空間のデータを空きページにコピーしそのページのアドレスを返す
 int copy_mount_options(const void __user *data, unsigned long *where)
 {
 	int i;
@@ -968,6 +976,7 @@ int copy_mount_options(const void __user *data, unsigned long *where)
 	if (!data)
 		return 0;
 
+	// 空きページの確保
 	if (!(page = __get_free_page(GFP_KERNEL)))
 		return -ENOMEM;
 
@@ -976,18 +985,21 @@ int copy_mount_options(const void __user *data, unsigned long *where)
 	 * the remainder of the page.
 	 */
 	/* copy_from_user cannot cross TASK_SIZE ! */
-	size = TASK_SIZE - (unsigned long)data;
-	if (size > PAGE_SIZE)
+	size = TASK_SIZE - (unsigned long)data; // カーネル領域をまたがない
+	if (size > PAGE_SIZE) // コピーの最大サイズはページサイズ
 		size = PAGE_SIZE;
 
+	// exact_copy_from_userはデータのコピーが完了すると0を返す
 	i = size - exact_copy_from_user((void *)page, data, size);
-	if (!i) {
+	// コピーが失敗していた場合にはページを開放する
+	if (!i) {}
 		free_page(page); 
 		return -EFAULT;
 	}
+	// コピーしたデータがページサイズでアライメントされていない場合には残りの部分を0クリアする
 	if (i != PAGE_SIZE)
 		memset((char *)page + i, 0, PAGE_SIZE - i);
-	*where = page;
+	*where = page; // 取得しデータをコピーしたページのアドレスを返す
 	return 0;
 }
 
@@ -1012,12 +1024,11 @@ long do_mount(char * dev_name, char * dir_name, char *type_page,
 	int retval = 0;
 	int mnt_flags = 0;
 
-	/* Discard magic */
+	/* マジックナンバーを破棄 */
 	if ((flags & MS_MGC_MSK) == MS_MGC_VAL)
 		flags &= ~MS_MGC_MSK;
 
-	/* Basic sanity checks */
-
+	/* 基本的なバリデーション */
 	if (!dir_name || !*dir_name || !memchr(dir_name, 0, PAGE_SIZE))
 		return -EINVAL;
 	if (dev_name && !memchr(dev_name, 0, PAGE_SIZE))
@@ -1026,7 +1037,7 @@ long do_mount(char * dev_name, char * dir_name, char *type_page,
 	if (data_page)
 		((char *)data_page)[PAGE_SIZE - 1] = 0;
 
-	/* Separate the per-mountpoint flags */
+	/* マウントフラグをコピー */
 	if (flags & MS_NOSUID)
 		mnt_flags |= MNT_NOSUID;
 	if (flags & MS_NODEV)
@@ -1035,7 +1046,7 @@ long do_mount(char * dev_name, char * dir_name, char *type_page,
 		mnt_flags |= MNT_NOEXEC;
 	flags &= ~(MS_NOSUID|MS_NOEXEC|MS_NODEV|MS_ACTIVE);
 
-	/* ... and get the mountpoint */
+	/* パス名の検索*/
 	retval = path_lookup(dir_name, LOOKUP_FOLLOW, &nd);
 	if (retval)
 		return retval;
@@ -1044,14 +1055,16 @@ long do_mount(char * dev_name, char * dir_name, char *type_page,
 	if (retval)
 		goto dput_out;
 
-	if (flags & MS_REMOUNT)
+	/* マウントフラグ固有の処理 */
+	if (flags & MS_REMOUNT) /* マウントフラグ及びファイルシステムフラグの変更 */
 		retval = do_remount(&nd, flags & ~MS_REMOUNT, mnt_flags,
 				    data_page);
-	else if (flags & MS_BIND)
+	else if (flags & MS_BIND) /* バインドマウント */
 		retval = do_loopback(&nd, dev_name, flags & MS_REC);
-	else if (flags & MS_MOVE)
+	else if (flags & MS_MOVE) /* マウントポイントの変更 */
 		retval = do_move_mount(&nd, dev_name);
 	else
+		/* 通常のマウント(特殊ファイルシステムやディスク上にデータを持つファイルシステム) */
 		retval = do_new_mount(&nd, type_page, flags, mnt_flags,
 				      dev_name, data_page);
 dput_out:
@@ -1155,6 +1168,7 @@ asmlinkage long sys_mount(char __user * dev_name, char __user * dir_name,
 	unsigned long dev_page;
 	char *dir_page;
 
+	// ユーザ空間からデータをコピー
 	retval = copy_mount_options (type, &type_page);
 	if (retval < 0)
 		return retval;
@@ -1164,20 +1178,23 @@ asmlinkage long sys_mount(char __user * dev_name, char __user * dir_name,
 	if (IS_ERR(dir_page))
 		goto out1;
 
+	// ユーザ空間からデータをコピー
 	retval = copy_mount_options (dev_name, &dev_page);
 	if (retval < 0)
 		goto out2;
 
+	// ユーザ空間からデータをコピー
 	retval = copy_mount_options (data, &data_page);
 	if (retval < 0)
 		goto out3;
 
-	lock_kernel();
+	lock_kernel(); // カーネルロック
 	retval = do_mount((char*)dev_page, dir_page, (char*)type_page,
 			  flags, (void*)data_page);
-	unlock_kernel();
-	free_page(data_page);
+	unlock_kernel(); // カーネルロック解除
+	free_page(data_page); // ページの解放
 
+// コピーしたデータが存在するページの開放する
 out3:
 	free_page(dev_page);
 out2:

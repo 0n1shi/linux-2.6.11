@@ -79,10 +79,10 @@ extern int dir_notify_enable;
 #define SEL_EX		4
 
 /* public flags for file_system_type */
-#define FS_REQUIRES_DEV 1 
-#define FS_BINARY_MOUNTDATA 2
-#define FS_REVAL_DOT	16384	/* Check the paths ".", ".." for staleness */
-#define FS_ODD_RENAME	32768	/* Temporary stuff; will go away as soon
+#define FS_REQUIRES_DEV 1 /* 物理ディスクデバイス上に存在する */
+#define FS_BINARY_MOUNTDATA 2 /* ファイルシステムがバイナリのマウントデータを使用する */
+#define FS_REVAL_DOT	16384	/* dエントリキャッシュの"."、".."について有効性の確認を行う(ネットワークファイルシステム用) */ /* Check the paths ".", ".." for staleness */
+#define FS_ODD_RENAME	32768	/* renameをmove操作に変更する */ /* Temporary stuff; will go away as soon
 				  * as nfs_rename() will be cleaned up
 				  */
 /*
@@ -1284,14 +1284,14 @@ find_exported_dentry(struct super_block *sb, void *obj, void *parent,
 		     void *context);
 
 struct file_system_type {
-	const char *name;
-	int fs_flags;
+	const char *name; /* ファイルシステム名 */
+	int fs_flags; /* ファイルシステム種別のフラグ */
 	struct super_block *(*get_sb) (struct file_system_type *, int,
-				       const char *, void *);
-	void (*kill_sb) (struct super_block *);
-	struct module *owner;
-	struct file_system_type * next;
-	struct list_head fs_supers;
+				       const char *, void *); /* スーパーブロック読み取り用メソッド */
+	void (*kill_sb) (struct super_block *); /* スーパーブロック削除メソッド */
+	struct module *owner; /* ファイルシステムを実装するモジュールへのポインタ */
+	struct file_system_type * next; /* ファイルシステム種別リストの次要素へのポインタ */
+	struct list_head fs_supers; /* 同じファイルシステム種別のスーパーブロックオブジェクトリストの先頭 */
 };
 
 struct super_block *get_sb_bdev(struct file_system_type *fs_type,

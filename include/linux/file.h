@@ -20,17 +20,17 @@
  * Open file table structure
  */
 struct files_struct {
-        atomic_t count;
-        spinlock_t file_lock;     /* Protects all the below members.  Nests inside tsk->alloc_lock */
-        int max_fds;
-        int max_fdset;
-        int next_fd;
-        struct file ** fd;      /* current fd array */
-        fd_set *close_on_exec;
-        fd_set *open_fds;
-        fd_set close_on_exec_init;
-        fd_set open_fds_init;
-        struct file * fd_array[NR_OPEN_DEFAULT];
+        atomic_t count; /* この構造体を共有するプロセス数*/
+        spinlock_t file_lock;　/* この構造体用のスピンロック */
+        int max_fds; /* ファイルオブジェクトの最大数 */
+        int max_fdset; /* ファイルディスクリプタの現在の最大数 */
+        int next_fd; /* 次に割り当てるのディスクリプタ番号 */
+        struct file ** fd; /* ファイルオブジェクトポインタ配列へのポインタ */
+        fd_set *close_on_exec; /* exec()時にクローズする必要のあるファイルディスクリプタ */
+        fd_set *open_fds; /* オープン中のファイルディスクリプタへのポインタ */
+        fd_set close_on_exec_init; /* exec()の際にクローズすべきファイルディスクリプタ集合の初期値 */
+        fd_set open_fds_init; /* ファイルディスクリプタ集合の初期値 */
+        struct file * fd_array[NR_OPEN_DEFAULT]; /* ファイルオブジェクトへのポインタを格納する初期配列 */
 };
 
 extern void FASTCALL(__fput(struct file *));
