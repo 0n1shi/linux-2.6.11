@@ -68,18 +68,20 @@ int register_filesystem(struct file_system_type * fs)
 	int res = 0;
 	struct file_system_type ** p;
 
+	// fsが指定されていない
 	if (!fs)
 		return -EINVAL;
 	if (fs->next)
 		return -EBUSY;
-	INIT_LIST_HEAD(&fs->fs_supers);
-	write_lock(&file_systems_lock);
+	
+	INIT_LIST_HEAD(&fs->fs_supers); // 同一種別のファイルシステムリストを初期化
+	write_lock(&file_systems_lock); // ロック
 	p = find_filesystem(fs->name);
-	if (*p)
+	if (*p) // 既に登録されている場合はエラー
 		res = -EBUSY;
 	else
-		*p = fs;
-	write_unlock(&file_systems_lock);
+		*p = fs; // file_sysytemsグローバル変数の末尾に新たなファイルシステム種別を登録
+	write_unlock(&file_systems_lock); // アンロック
 	return res;
 }
 

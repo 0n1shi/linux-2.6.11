@@ -677,6 +677,7 @@ struct super_block *get_sb_bdev(struct file_system_type *fs_type,
 	struct super_block *s;
 	int error = 0;
 
+	// ブロックデバイスをオープン
 	bdev = open_bdev_excl(dev_name, flags, fs_type);
 	if (IS_ERR(bdev))
 		return (struct super_block *)bdev;
@@ -686,7 +687,8 @@ struct super_block *get_sb_bdev(struct file_system_type *fs_type,
 	 * will protect the lockfs code from trying to start a snapshot
 	 * while we are mounting
 	 */
-	down(&bdev->bd_mount_sem);
+	down(&bdev->bd_mount_sem); // セマフォ
+	// スーパーブロックオブジェクトの確保及び取得
 	s = sget(fs_type, test_bdev_super, set_bdev_super, bdev);
 	up(&bdev->bd_mount_sem);
 	if (IS_ERR(s))
@@ -702,11 +704,11 @@ struct super_block *get_sb_bdev(struct file_system_type *fs_type,
 	} else {
 		char b[BDEVNAME_SIZE];
 
-		s->s_flags = flags;
-		strlcpy(s->s_id, bdevname(bdev, b), sizeof(s->s_id));
+		s->s_flags = flags; // フラグを設定
+		strlcpy(s->s_id, bdevname(bdev, b), sizeof(s->s_id)); // ブロックデバイス名をコピー
 		s->s_old_blocksize = block_size(bdev);
 		sb_set_blocksize(s, s->s_old_blocksize);
-		error = fill_super(s, data, flags & MS_VERBOSE ? 1 : 0);
+		error = fill_super(s, data, flags & MS_VERBOSE ? 1 : 0); // スーパーブロックの読み出し
 		if (error) {
 			up_write(&s->s_umount);
 			deactivate_super(s);
@@ -717,7 +719,7 @@ struct super_block *get_sb_bdev(struct file_system_type *fs_type,
 		}
 	}
 
-	return s;
+	return s; // スーパーブロックオブジェクトを返す
 
 out:
 	close_bdev_excl(bdev);

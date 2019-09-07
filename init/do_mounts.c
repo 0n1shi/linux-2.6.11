@@ -383,8 +383,9 @@ void __init mount_root(void)
 			change_floppy("root floppy");
 	}
 #endif
-	create_dev("/dev/root", ROOT_DEV, root_device_name);
-	mount_block_root("/dev/root", root_mountflags);
+	create_dev("/dev/root", ROOT_DEV, root_device_name); // ルートファイルシステムの存在するデバイスファイルを作成
+	// デバイスファイルのマウント及びプロセスのカレントディレクトリを/rootに
+	mount_block_root("/dev/root", root_mountflags); 
 }
 
 /*
@@ -394,8 +395,10 @@ void __init prepare_namespace(void)
 {
 	int is_floppy;
 
+	// devfsのマウント
 	mount_devfs();
 
+	// ルートデバイスのマウント完了待ち
 	if (root_delay) {
 		printk(KERN_INFO "Waiting %dsec before mounting root device...\n",
 		       root_delay);
@@ -404,27 +407,33 @@ void __init prepare_namespace(void)
 
 	md_run_setup();
 
+	// ここではデバイスファイル名が指定されていると仮定する
 	if (saved_root_name[0]) {
 		root_device_name = saved_root_name;
+		// デバイス名をデバイス番号に変換
 		ROOT_DEV = name_to_dev_t(root_device_name);
+		// デバイス名に"/dev/"の文字列を先頭に加える。
 		if (strncmp(root_device_name, "/dev/", 5) == 0)
 			root_device_name += 5;
 	}
 
+	// 今回はフロッピーでないと仮定
 	is_floppy = MAJOR(ROOT_DEV) == FLOPPY_MAJOR;
 
+	// 初期RAMディスクをロード
 	if (initrd_load())
 		goto out;
 
+	// 今回はフロッピーでないと仮定
 	if (is_floppy && rd_doload && rd_load_disk(0))
 		ROOT_DEV = Root_RAM0;
 
-	mount_root();
+	mount_root(); // "/dev/root"の作成及びマウント
 out:
-	umount_devfs("/dev");
-	sys_mount(".", "/", NULL, MS_MOVE, NULL);
-	sys_chroot(".");
+	umount_devfs("/dev"); // devfsのアンマウント
+	sys_mount(".", "/", NULL, MS_MOVE, NULL); // カレントディレクトリをルートにマウント
+	sys_chroot("."); // それをルートディレクトリに変更
 	security_sb_post_mountroot();
-	mount_devfs_fs ();
+	mount_devfs_fs();
 }
 

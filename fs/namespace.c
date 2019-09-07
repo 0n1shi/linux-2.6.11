@@ -1381,9 +1381,12 @@ static void __init init_mount_tree(void)
 	struct namespace *namespace;
 	struct task_struct *g, *p;
 
+	// rootfsのマウント
 	mnt = do_kern_mount("rootfs", 0, "rootfs", NULL);
 	if (IS_ERR(mnt))
 		panic("Can't create rootfs");
+
+	// initプロセスのための名前空間オブジェクトの取得及び初期化
 	namespace = kmalloc(sizeof(*namespace), GFP_KERNEL);
 	if (!namespace)
 		panic("Can't allocate initial namespace");
@@ -1395,6 +1398,8 @@ static void __init init_mount_tree(void)
 	mnt->mnt_namespace = namespace;
 
 	init_task.namespace = namespace;
+
+	// 他のプロセスにも名前空間オブジェクトを設定 
 	read_lock(&tasklist_lock);
 	do_each_thread(g, p) {
 		get_namespace(namespace);
@@ -1402,6 +1407,7 @@ static void __init init_mount_tree(void)
 	} while_each_thread(g, p);
 	read_unlock(&tasklist_lock);
 
+	// カレントプロセスのワーキングディレクトリとルートディレクトリを設定
 	set_fs_pwd(current->fs, namespace->root, namespace->root->mnt_root);
 	set_fs_root(current->fs, namespace->root, namespace->root->mnt_root);
 }
