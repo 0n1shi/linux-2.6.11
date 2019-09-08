@@ -960,25 +960,25 @@ int fastcall path_lookup(const char *name, unsigned int flags, struct nameidata 
 	nd->flags = flags;
 	nd->depth = 0;
 
-	read_lock(&current->fs->lock);
-	if (*name=='/') {
+	read_lock(&current->fs->lock); // ロック取得
+	if (*name=='/') { // 絶対パス
 		if (current->fs->altroot && !(nd->flags & LOOKUP_NOALT)) {
 			nd->mnt = mntget(current->fs->altrootmnt);
-			nd->dentry = dget(current->fs->altroot);
+			nd->dentry = dget(current->fs->altroot);；
 			read_unlock(&current->fs->lock);
 			if (__emul_lookup_dentry(name,nd))
 				return 0;
 			read_lock(&current->fs->lock);
 		}
-		nd->mnt = mntget(current->fs->rootmnt);
-		nd->dentry = dget(current->fs->root);
+		nd->mnt = mntget(current->fs->rootmnt); // マウント情報と
+		nd->dentry = dget(current->fs->root); // dエントリを設定
 	} else {
-		nd->mnt = mntget(current->fs->pwdmnt);
-		nd->dentry = dget(current->fs->pwd);
+		nd->mnt = mntget(current->fs->pwdmnt); // マウント情報と
+		nd->dentry = dget(current->fs->pwd); // dエントリを設定
 	}
-	read_unlock(&current->fs->lock);
-	current->total_link_count = 0;
-	retval = link_path_walk(name, nd);
+	read_unlock(&current->fs->lock); // ロックを解除
+	current->total_link_count = 0; // リンクの総カウンタを初期化
+	retval = link_path_walk(name, nd); // 検索処理
 	if (unlikely(current->audit_context
 		     && nd && nd->dentry && nd->dentry->d_inode))
 		audit_inode(name,

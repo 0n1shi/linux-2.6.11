@@ -13,17 +13,17 @@ struct open_intent {
 enum { MAX_NESTED_LINKS = 5 };
 
 struct nameidata {
-	struct dentry	*dentry;
-	struct vfsmount *mnt;
-	struct qstr	last;
-	unsigned int	flags;
-	int		last_type;
-	unsigned	depth;
-	char *saved_names[MAX_NESTED_LINKS + 1];
+	struct dentry	*dentry; // dエントリ
+	struct vfsmount *mnt; // ファイルシステムオブジェクトのアドレス
+	struct qstr	last; // パス名の最後の要素
+	unsigned int	flags; // 検索のためのフラグ
+	int		last_type; // パス名の最後の要素の種類
+	unsigned	depth; // シンボリックリンクのネスト数(<=5)
+	char *saved_names[MAX_NESTED_LINKS + 1]; // シンボリックリンクのネストしたパス名の配列
 
 	/* Intent data */
 	union {
-		struct open_intent open;
+		struct open_intent open; // ファイルがアクセスされる方法を指定
 	} intent;
 };
 
@@ -40,17 +40,17 @@ enum {LAST_NORM, LAST_ROOT, LAST_DOT, LAST_DOTDOT, LAST_BIND};
  *  - internal "there are more path compnents" flag
  *  - locked when lookup done with dcache_lock held
  */
-#define LOOKUP_FOLLOW		 1
-#define LOOKUP_DIRECTORY	 2
-#define LOOKUP_CONTINUE		 4
-#define LOOKUP_PARENT		16
-#define LOOKUP_NOALT		32
+#define LOOKUP_FOLLOW		 1 // 検索結果がシンボリックリンクである場合に検索を続行
+#define LOOKUP_DIRECTORY	 2 // 最後の要素はディレクトリでなければならない
+#define LOOKUP_CONTINUE		 4 // パス名に調べるべきファイル名が残っている
+#define LOOKUP_PARENT		16 // パス名の最後の要素を含むディレクトリを検索
+#define LOOKUP_NOALT		32 // エミュレートされたルートディレクトリを考慮しない
 /*
  * Intent data
  */
-#define LOOKUP_OPEN		(0x0100)
-#define LOOKUP_CREATE		(0x0200)
-#define LOOKUP_ACCESS		(0x0400)
+#define LOOKUP_OPEN		(0x0100) // ファイルをオープンする目的での検索
+#define LOOKUP_CREATE		(0x0200) // ファイルを生成する目的での検索
+#define LOOKUP_ACCESS		(0x0400) // ファイルに対するユーザ権限を調べる目的での検索
 
 extern int FASTCALL(__user_walk(const char __user *, unsigned, struct nameidata *));
 #define user_path_walk(name,nd) \
