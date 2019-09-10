@@ -223,6 +223,7 @@ ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 {
 	ssize_t ret;
 
+	// バリデーション
 	if (!(file->f_mode & FMODE_READ))
 		return -EBADF;
 	if (!file->f_op || (!file->f_op->read && !file->f_op->aio_read))
@@ -230,23 +231,24 @@ ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 	if (unlikely(!access_ok(VERIFY_WRITE, buf, count)))
 		return -EFAULT;
 
-	ret = rw_verify_area(READ, file, pos, count);
+	ret = rw_verify_area(READ, file, pos, count); // ロックがかかっているかどうかの確認
 	if (!ret) {
-		ret = security_file_permission (file, MAY_READ);
+		ret = security_file_permission (file, MAY_READ); // 権限の確認
 		if (!ret) {
+			// readがある場合
 			if (file->f_op->read)
 				ret = file->f_op->read(file, buf, count, pos);
 			else
-				ret = do_sync_read(file, buf, count, pos);
-			if (ret > 0) {
-				dnotify_parent(file->f_dentry, DN_ACCESS);
+				ret = do_sync_read(file, buf, count, pos); // 内部でaio_readを呼び出す
+			if (ret > 0) { // 読み込みに成功した場合
+				dnotify_parent(file->f_dentry, DN_ACCESS); // ファイルアクセスイベントを通知
 				current->rchar += ret;
 			}
 			current->syscr++;
 		}
 	}
 
-	return ret;
+	return ret; // 読み出したバイト数
 }
 
 EXPORT_SYMBOL(vfs_read);
@@ -315,11 +317,12 @@ asmlinkage ssize_t sys_read(unsigned int fd, char __user * buf, size_t count)
 	ssize_t ret = -EBADF;
 	int fput_needed;
 
+	// ファイルディレクリプタ番号から対応するファイルオブジェクトを取得する
 	file = fget_light(fd, &fput_needed);
-	if (file) {
-		loff_t pos = file_pos_read(file);
+	if (file) { // ファイルオブジェクトの取得に成功
+		loff_t pos = file_pos_read(file); // ファイルオブジェクトのオフセットを取得
 		ret = vfs_read(file, buf, count, &pos);
-		file_pos_write(file, pos);
+		file_pos_write(file, pos); // オフセットの更新
 		fput_light(file, fput_needed);
 	}
 

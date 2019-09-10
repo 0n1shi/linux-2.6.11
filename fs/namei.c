@@ -688,13 +688,15 @@ int fastcall link_path_walk(const char * name, struct nameidata *nd)
 	int err;
 	unsigned int lookup_flags = nd->flags;
 	
+	// 先頭のスラッシュを処理
+	// ここからスラッシュは検索開始位置の指定にのみ使用されていることがわかる
 	while (*name=='/')
 		name++;
-	if (!*name)
+	if (!*name) // スラッシュのみ
 		goto return_reval;
 
 	inode = nd->dentry->d_inode;
-	if (nd->depth)
+	if (nd->depth) // シンボリックリンクを追跡する
 		lookup_flags = LOOKUP_FOLLOW;
 
 	/* At this point we know we have a real path component. */
@@ -703,8 +705,9 @@ int fastcall link_path_walk(const char * name, struct nameidata *nd)
 		struct qstr this;
 		unsigned int c;
 
-		err = exec_permission_lite(inode, nd);
-		if (err == -EAGAIN) { 
+		// 権限の確認
+		err = exec_permission_lite(inode, nd); 
+		if (err == -EAGAIN) { // 権限不足
 			err = permission(inode, MAY_EXEC, nd);
 		}
  		if (err)
@@ -713,6 +716,7 @@ int fastcall link_path_walk(const char * name, struct nameidata *nd)
 		this.name = name;
 		c = *(const unsigned char *)name;
 
+		// 次の要素をthisに設定(文字列及びその長さ、ハッシュ)
 		hash = init_name_hash();
 		do {
 			name++;
@@ -722,47 +726,45 @@ int fastcall link_path_walk(const char * name, struct nameidata *nd)
 		this.len = name - (const char *) this.name;
 		this.hash = end_name_hash(hash);
 
-		/* remove trailing slashes? */
+		/* 末尾のスラッシュを削除 */
 		if (!c)
-			goto last_component;
-		while (*++name == '/');
-		if (!*name)
+			goto last_component; // 末尾の要素
+		while (*++name == '/'); // スラッシュを読み飛ばす
+		if (!*name) // スラッシュが最後に来ている場合
 			goto last_with_slashes;
 
-		/*
-		 * "." and ".." are special - ".." especially so because it has
-		 * to be able to know about the current root directory and
-		 * parent relationships.
-		 */
+		// カレントディレクトリ(.)および親ディレクトリ
 		if (this.name[0] == '.') switch (this.len) {
 			default:
 				break;
 			case 2:	
-				if (this.name[1] != '.')
+				if (this.name[1] != '.') // 親ディレクトリ
 					break;
 				follow_dotdot(&nd->mnt, &nd->dentry);
 				inode = nd->dentry->d_inode;
 				/* fallthrough */
-			case 1:
+			case 1: // カレントディレクトリの場合そのまま処理を続行
 				continue;
 		}
-		/*
-		 * See if the low-level filesystem might want
-		 * to use its own hash..
-		 */
+
+		// ファイルシステム独自をハッシュ関数の実行
 		if (nd->dentry->d_op && nd->dentry->d_op->d_hash) {
 			err = nd->dentry->d_op->d_hash(nd->dentry, &this);
 			if (err < 0)
 				break;
 		}
-		nd->flags |= LOOKUP_CONTINUE;
-		/* This does the actual lookups.. */
-		err = do_lookup(nd, &this, &next);
+
+		nd->flags |= LOOKUP_CONTINUE; // 検索続行
+		err = do_lookup(nd, &this, &next); // 実際の検索処理
 		if (err)
 			break;
-		/* Check mountpoints.. */
+		/**
+		 * dエントリが他のファイルシステム上にあるか確認し
+		 * もしそうであればマウント情報とdエントリの情報を更新する
+		 */
 		follow_mount(&next.mnt, &next.dentry);
 
+		// iノードの有効性を確認
 		err = -ENOENT;
 		inode = next.dentry->d_inode;
 		if (!inode)
@@ -771,6 +773,7 @@ int fastcall link_path_walk(const char * name, struct nameidata *nd)
 		if (!inode->i_op)
 			goto out_dput;
 
+		// 
 		if (inode->i_op->follow_link) {
 			mntget(next.mnt);
 			err = do_follow_link(next.dentry, nd);

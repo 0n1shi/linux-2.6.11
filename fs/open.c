@@ -761,8 +761,10 @@ struct file *filp_open(const char * filename, int flags, int mode)
 	if (namei_flags & O_TRUNC)
 		namei_flags |= 2;
 
+	// パス検索
 	error = open_namei(filename, namei_flags, mode, &nd);
 	if (!error)
+		// dエントリ及びマウント情報からファイルオブジェクトを初期化し返す
 		return dentry_open(nd.dentry, nd.mnt, flags);
 
 	return ERR_PTR(error);
@@ -920,12 +922,12 @@ EXPORT_SYMBOL(put_unused_fd);
 
 void fastcall fd_install(unsigned int fd, struct file * file)
 {
-	struct files_struct *files = current->files;
-	spin_lock(&files->file_lock);
-	if (unlikely(files->fd[fd] != NULL))
+	struct files_struct *files = current->files; // ファイルオブジェクトのポインタ配列
+	spin_lock(&files->file_lock); // ロック
+	if (unlikely(files->fd[fd] != NULL)) // 既に使用されていないか
 		BUG();
-	files->fd[fd] = file;
-	spin_unlock(&files->file_lock);
+	files->fd[fd] = file; // ファイルオブジェクトのアドレスを設定
+	spin_unlock(&files->file_lock); // アンロック
 }
 
 EXPORT_SYMBOL(fd_install);
@@ -938,16 +940,17 @@ asmlinkage long sys_open(const char __user * filename, int flags, int mode)
 #if BITS_PER_LONG != 32
 	flags |= O_LARGEFILE;
 #endif
-	tmp = getname(filename);
+	tmp = getname(filename); // ユーザプロセス空間からファイル名を取得
 	fd = PTR_ERR(tmp);
-	if (!IS_ERR(tmp)) {
-		fd = get_unused_fd();
-		if (fd >= 0) {
-			struct file *f = filp_open(tmp, flags, mode);
+	if (!IS_ERR(tmp)) { // 無効な値でない場合
+		fd = get_unused_fd(); // 未使用のファイルディレクリプタ番号を取得
+		if (fd >= 0) { // ファイルディレクリプタが存在する場合
+			struct file *f = filp_open(tmp, flags, mode); // ファイルオブジェクトを取得
+			// エラー処理
 			error = PTR_ERR(f);
 			if (IS_ERR(f))
 				goto out_error;
-			fd_install(fd, f);
+			fd_install(fd, f); // 取得した未使用のファイルディスクリプタ番号にファイルオブジェクトをバインド
 		}
 out:
 		putname(tmp);

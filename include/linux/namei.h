@@ -12,6 +12,9 @@ struct open_intent {
 
 enum { MAX_NESTED_LINKS = 5 };
 
+/**
+ * パス名検索の結果
+ */
 struct nameidata {
 	struct dentry	*dentry; // dエントリ
 	struct vfsmount *mnt; // ファイルシステムオブジェクトのアドレス
