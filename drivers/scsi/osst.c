@@ -4676,7 +4676,7 @@ static int os_scsi_tape_flush(struct file * filp)
 	struct scsi_request * SRpnt  = NULL;
 	char		    * name   = tape_name(STp);
 
-	if (file_count(filp) > 1)
+	if (file_count(filp) > 1) // 参照カウンタが1以上の(カーネルを除いた他のプロセスの参照が存在する)場合
 		return 0;
 
 	if ((STps->rw == ST_WRITING || STp->dirty) && !STp->pos_unknown) {

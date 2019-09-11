@@ -990,20 +990,21 @@ int filp_close(struct file *filp, fl_owner_t id)
 	if (retval)
 		filp->f_error = 0; // エラーをクリア
 
-	if (!file_count(filp)) {
+	if (!file_count(filp)) { // 参照カウンタが0
 		printk(KERN_ERR "VFS: Close: file count is 0\n");
 		return retval;
 	}
 
+	// flushメソッドが設定されている場合には実行
 	if (filp->f_op && filp->f_op->flush) {
 		int err = filp->f_op->flush(filp);
 		if (!retval)
 			retval = err;
 	}
 
-	dnotify_flush(filp, id);
+	dnotify_flush(filp, id); // フラッシュの通知
 	locks_remove_posix(filp, id);
-	fput(filp);
+	fput(filp); // オブジェクトの解放
 	return retval;
 }
 
