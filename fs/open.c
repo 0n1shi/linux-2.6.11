@@ -986,9 +986,9 @@ int filp_close(struct file *filp, fl_owner_t id)
 	int retval;
 
 	/* Report and clear outstanding errors */
-	retval = filp->f_error;
+	retval = filp->f_error; // エラー番号
 	if (retval)
-		filp->f_error = 0;
+		filp->f_error = 0; // エラーをクリア
 
 	if (!file_count(filp)) {
 		printk(KERN_ERR "VFS: Close: file count is 0\n");
@@ -1019,20 +1019,20 @@ asmlinkage long sys_close(unsigned int fd)
 	struct file * filp;
 	struct files_struct *files = current->files;
 
-	spin_lock(&files->file_lock);
-	if (fd >= files->max_fds)
+	spin_lock(&files->file_lock); // files_structオブジェクトのロック
+	if (fd >= files->max_fds) // 最大値を超過している場合
 		goto out_unlock;
-	filp = files->fd[fd];
-	if (!filp)
+	filp = files->fd[fd]; // ファイルオブジェクトの取得
+	if (!filp) // 無ければ終了
 		goto out_unlock;
-	files->fd[fd] = NULL;
+	files->fd[fd] = NULL; // オブジェクトのポインタをクリア
 	FD_CLR(fd, files->close_on_exec);
-	__put_unused_fd(files, fd);
+	__put_unused_fd(files, fd); // 次の割り当て対象のファイルディスクリプタ番号を戻す
 	spin_unlock(&files->file_lock);
-	return filp_close(filp, files);
+	return filp_close(filp, files); // ファイルオブジェクトの解放
 
 out_unlock:
-	spin_unlock(&files->file_lock);
+	spin_unlock(&files->file_lock); // アンロック
 	return -EBADF;
 }
 

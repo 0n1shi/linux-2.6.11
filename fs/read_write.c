@@ -231,7 +231,7 @@ ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 	if (unlikely(!access_ok(VERIFY_WRITE, buf, count)))
 		return -EFAULT;
 
-	ret = rw_verify_area(READ, file, pos, count); // ロックがかかっているかどうかの確認
+	ret = rw_verify_area(READ, file, pos, count); // ロックの有無を確認
 	if (!ret) {
 		ret = security_file_permission (file, MAY_READ); // 権限の確認
 		if (!ret) {
@@ -273,6 +273,7 @@ ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_
 {
 	ssize_t ret;
 
+	// バリデーション
 	if (!(file->f_mode & FMODE_WRITE))
 		return -EBADF;
 	if (!file->f_op || (!file->f_op->write && !file->f_op->aio_write))
@@ -280,23 +281,24 @@ ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_
 	if (unlikely(!access_ok(VERIFY_READ, buf, count)))
 		return -EFAULT;
 
-	ret = rw_verify_area(WRITE, file, pos, count);
+	ret = rw_verify_area(WRITE, file, pos, count); // ロックの有無を確認
 	if (!ret) {
-		ret = security_file_permission (file, MAY_WRITE);
+		ret = security_file_permission (file, MAY_WRITE); // 権限の確認
 		if (!ret) {
+			// writeが設定されている場合
 			if (file->f_op->write)
 				ret = file->f_op->write(file, buf, count, pos);
 			else
-				ret = do_sync_write(file, buf, count, pos);
+				ret = do_sync_write(file, buf, count, pos); // aio_writeを呼び出す
 			if (ret > 0) {
-				dnotify_parent(file->f_dentry, DN_MODIFY);
+				dnotify_parent(file->f_dentry, DN_MODIFY); // ファイルの変更イベントを通知
 				current->wchar += ret;
 			}
 			current->syscw++;
 		}
 	}
 
-	return ret;
+	return ret; // 書き込んだバイト数
 }
 
 EXPORT_SYMBOL(vfs_write);
@@ -323,7 +325,7 @@ asmlinkage ssize_t sys_read(unsigned int fd, char __user * buf, size_t count)
 		loff_t pos = file_pos_read(file); // ファイルオブジェクトのオフセットを取得
 		ret = vfs_read(file, buf, count, &pos);
 		file_pos_write(file, pos); // オフセットの更新
-		fput_light(file, fput_needed);
+		fput_light(file, fput_needed); // 利用数カウンタのデクリメント
 	}
 
 	return ret;
@@ -336,12 +338,13 @@ asmlinkage ssize_t sys_write(unsigned int fd, const char __user * buf, size_t co
 	ssize_t ret = -EBADF;
 	int fput_needed;
 
+	// ファイルディレクリプタ番号から対応するファイルオブジェクトを取得する
 	file = fget_light(fd, &fput_needed);
-	if (file) {
+	if (file) { // ファイルオブジェクトの取得に成功
 		loff_t pos = file_pos_read(file);
-		ret = vfs_write(file, buf, count, &pos);
-		file_pos_write(file, pos);
-		fput_light(file, fput_needed);
+		ret = vfs_write(file, buf, count, &pos); // ファイルオブジェクトのオフセットを取得
+		file_pos_write(file, pos); // オフセットの更新
+		fput_light(file, fput_needed); // 利用数カウンタのデクリメント
 	}
 
 	return ret;

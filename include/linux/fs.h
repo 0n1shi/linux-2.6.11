@@ -578,7 +578,7 @@ struct file {
 	struct dentry		*f_dentry; // オープン時に利用したファイル名を保持するdエントリ
 	struct vfsmount         *f_vfsmnt; // そのファイルを扱うファイルシステムへのポインタ
 	struct file_operations	*f_op; // ファイル操作用のメソッドを保持する構造体へのポインタ
-	atomic_t		f_count; // ファイルオブジェクトへの参照ポインタ
+	atomic_t		f_count; // ファイルオブジェクトへの参照カウンタ
 	unsigned int 		f_flags; // ファイルのオープン時に指定されたフラグ
 	mode_t			f_mode; // プロセスのアクセスモード
 	int			f_error; // ネットワーク経由の書き込み時に発生したエラー番号
