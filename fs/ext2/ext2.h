@@ -5,15 +5,15 @@
  * second extended file system inode data in memory
  */
 struct ext2_inode_info {
-	__le32	i_data[15];
-	__u32	i_flags;
-	__u32	i_faddr;
-	__u8	i_frag_no;
-	__u8	i_frag_size;
-	__u16	i_state;
-	__u32	i_file_acl;
-	__u32	i_dir_acl;
-	__u32	i_dtime;
+	__le32	i_data[15]; // データブロック
+	__u32	i_flags; // フラグ
+	__u32	i_faddr; // フラグメントのアドレス
+	__u8	i_frag_no; // フラグメント番号
+	__u8	i_frag_size; // フラグメントサイズ
+	__u16	i_state; // ステータス
+	__u32	i_file_acl; // ファイル用のACL
+	__u32	i_dir_acl; // ディレクトリ用のACL
+	__u32	i_dtime; // 削除時刻
 
 	/*
 	 * i_block_group is the number of the block group which contains
@@ -22,14 +22,14 @@ struct ext2_inode_info {
 	 * place a file's data blocks near its inode block, and new inodes
 	 * near to their parent directory's inode.
 	 */
-	__u32	i_block_group;
+	__u32	i_block_group; /* ファイルのiノードを保持しているブロックグループ番号 */
 
 	/*
 	 * i_next_alloc_block is the logical (file-relative) number of the
 	 * most-recently-allocated block in this file.  Yes, it is misnamed.
 	 * We use this for detecting linearly ascending allocation requests.
 	 */
-	__u32	i_next_alloc_block;
+	__u32	i_next_alloc_block; /* ファイル内の直近でアロケートされたブロック番号 */
 
 	/*
 	 * i_next_alloc_goal is the *physical* companion to i_next_alloc_block.
@@ -37,10 +37,10 @@ struct ext2_inode_info {
 	 * allocated to this file.  This give us the goal (target) for the next
 	 * allocation when we detect linearly ascending requests.
 	 */
-	__u32	i_next_alloc_goal;
-	__u32	i_prealloc_block;
-	__u32	i_prealloc_count;
-	__u32	i_dir_start_lookup;
+	__u32	i_next_alloc_goal; /* i_next_alloc_blockの対となる物理ブロック番号 */
+	__u32	i_prealloc_block; // 予約ブロック
+	__u32	i_prealloc_count; // 予約ブロック数
+	__u32	i_dir_start_lookup; // 
 #ifdef CONFIG_EXT2_FS_XATTR
 	/*
 	 * Extended attributes can be read independently of the main file
@@ -49,14 +49,14 @@ struct ext2_inode_info {
 	 * instead we synchronize on xattr_sem when reading or changing
 	 * EAs.
 	 */
-	struct rw_semaphore xattr_sem;
+	struct rw_semaphore xattr_sem; // 拡張属性の取得操作のための読み書きセマフォ
 #endif
 #ifdef CONFIG_EXT2_FS_POSIX_ACL
-	struct posix_acl	*i_acl;
-	struct posix_acl	*i_default_acl;
+	struct posix_acl	*i_acl; // ファイルのACL
+	struct posix_acl	*i_default_acl; // ファイルのACL
 #endif
-	rwlock_t i_meta_lock;
-	struct inode	vfs_inode;
+	rwlock_t i_meta_lock; // 読み書きロック変数
+	struct inode	vfs_inode; // VFSのiノードオブジェクト
 };
 
 /*

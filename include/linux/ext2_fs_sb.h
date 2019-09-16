@@ -23,36 +23,36 @@
  * second extended-fs super-block data in memory
  */
 struct ext2_sb_info {
-	unsigned long s_frag_size;	/* Size of a fragment in bytes */
-	unsigned long s_frags_per_block;/* Number of fragments per block */
-	unsigned long s_inodes_per_block;/* Number of inodes per block */
-	unsigned long s_frags_per_group;/* Number of fragments in a group */
-	unsigned long s_blocks_per_group;/* Number of blocks in a group */
-	unsigned long s_inodes_per_group;/* Number of inodes in a group */
-	unsigned long s_itb_per_group;	/* Number of inode table blocks per group */
-	unsigned long s_gdb_count;	/* Number of group descriptor blocks */
-	unsigned long s_desc_per_block;	/* Number of group descriptors per block */
-	unsigned long s_groups_count;	/* Number of groups in the fs */
-	struct buffer_head * s_sbh;	/* Buffer containing the super block */
-	struct ext2_super_block * s_es;	/* Pointer to the super block in the buffer */
-	struct buffer_head ** s_group_desc;
-	unsigned long  s_mount_opt;
-	uid_t s_resuid;
-	gid_t s_resgid;
-	unsigned short s_mount_state;
-	unsigned short s_pad;
-	int s_addr_per_block_bits;
-	int s_desc_per_block_bits;
-	int s_inode_size;
-	int s_first_ino;
-	spinlock_t s_next_gen_lock;
-	u32 s_next_generation;
-	unsigned long s_dir_count;
-	u8 *s_debts;
-	struct percpu_counter s_freeblocks_counter;
-	struct percpu_counter s_freeinodes_counter;
-	struct percpu_counter s_dirs_counter;
-	struct blockgroup_lock s_blockgroup_lock;
+	unsigned long s_frag_size;	/* フラグメントのサイズ(単位: バイト) */
+	unsigned long s_frags_per_block;/* ブロック内にあるフラグメント数 */
+	unsigned long s_inodes_per_block;/* ブロック内のiノード数 */
+	unsigned long s_frags_per_group;/* グループ内のフラグメント数 */
+	unsigned long s_blocks_per_group;/* グループ内のブロック数 */
+	unsigned long s_inodes_per_group;/* グループ内のiノード数 */
+	unsigned long s_itb_per_group;	/* グループ内のiノードテーブルに使用されるブロック数 */
+	unsigned long s_gdb_count;	/* グループディスクリプタ用のブロック数 */
+	unsigned long s_desc_per_block;	/* ブロック内のグループディスクリプタ数 */
+	unsigned long s_groups_count;	/* ブロックグループ数 */
+	struct buffer_head * s_sbh;	/* バッファが保持しているスーパーブロック */
+	struct ext2_super_block * s_es;	/* バッファ内のスーパーブロックを参照するポインタ */
+	struct buffer_head ** s_group_desc; /* グループディスクリプタ */
+	unsigned long  s_mount_opt; /* マウントオプション */
+	uid_t s_resuid; /* UID */
+	gid_t s_resgid; /* GID */
+	unsigned short s_mount_state; /* マウントの状態 */
+	unsigned short s_pad; /* パディング */
+	int s_addr_per_block_bits; /* ブロックアドレスのアラインメント */
+	int s_desc_per_block_bits; /* ブロック内のディスクリプタ数 */
+	int s_inode_size; /* iノードサイズ */
+	int s_first_ino; /* 予約されていない最初のiノード番号 */
+	spinlock_t s_next_gen_lock; /* ロック用メンバ */
+	u32 s_next_generation; /* 次のiノードバージョン番号 */
+	unsigned long s_dir_count; /* ディレクトリ数 */
+	u8 *s_debts; 
+	struct percpu_counter s_freeblocks_counter; /* 空きブロック数 */
+	struct percpu_counter s_freeinodes_counter; /* 空きiノード数 */
+	struct percpu_counter s_dirs_counter; /* ディレクトリ数 */
+	struct blockgroup_lock s_blockgroup_lock; /* ブロックグループロック */
 };
 
 #endif	/* _LINUX_EXT2_FS_SB */

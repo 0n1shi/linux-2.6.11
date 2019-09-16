@@ -137,6 +137,8 @@ static kmem_cache_t * ext2_inode_cachep;
 static struct inode *ext2_alloc_inode(struct super_block *sb)
 {
 	struct ext2_inode_info *ei;
+	
+	/* スラブキャッシュからiノードオブジェクトを確保 */
 	ei = (struct ext2_inode_info *)kmem_cache_alloc(ext2_inode_cachep, SLAB_KERNEL);
 	if (!ei)
 		return NULL;
@@ -563,11 +565,12 @@ static int ext2_fill_super(struct super_block *sb, void *data, int silent)
 	int i, j;
 	__le32 features;
 
+	// ext2_sb_info
 	sbi = kmalloc(sizeof(*sbi), GFP_KERNEL);
 	if (!sbi)
 		return -ENOMEM;
 	sb->s_fs_info = sbi;
-	memset(sbi, 0, sizeof(*sbi));
+	memset(sbi, 0, sizeof(*sbi)); // ゼロクリア
 
 	/*
 	 * See what the current blocksize for the device is, and
@@ -576,7 +579,7 @@ static int ext2_fill_super(struct super_block *sb, void *data, int silent)
 	 * This is important for devices that have a hardware
 	 * sectorsize that is larger than the default.
 	 */
-	blocksize = sb_min_blocksize(sb, BLOCK_SIZE);
+	blocksize = sb_min_blocksize(sb, BLOCK_SIZE); // ブロックサイズの設定
 	if (!blocksize) {
 		printk ("EXT2-fs: unable to set blocksize\n");
 		goto failed_sbi;
@@ -586,6 +589,7 @@ static int ext2_fill_super(struct super_block *sb, void *data, int silent)
 	 * If the superblock doesn't start on a hardware sector boundary,
 	 * calculate the offset.  
 	 */
+	/* スーパーブロックの開始位置を算出 */
 	if (blocksize != BLOCK_SIZE) {
 		logic_sb_block = (sb_block*BLOCK_SIZE) / blocksize;
 		offset = (sb_block*BLOCK_SIZE) % blocksize;
@@ -593,6 +597,7 @@ static int ext2_fill_super(struct super_block *sb, void *data, int silent)
 		logic_sb_block = sb_block;
 	}
 
+	/* スーパーブロックの読み出し */
 	if (!(bh = sb_bread(sb, logic_sb_block))) {
 		printk ("EXT2-fs: unable to read superblock\n");
 		goto failed_sbi;
@@ -601,6 +606,7 @@ static int ext2_fill_super(struct super_block *sb, void *data, int silent)
 	 * Note: s_es must be initialized as soon as possible because
 	 *       some ext2 macro-instructions depend on its value
 	 */
+	// スーパーブロックへのポインタを取得
 	es = (struct ext2_super_block *) (((char *)bh->b_data) + offset);
 	sbi->s_es = es;
 	sb->s_magic = le16_to_cpu(es->s_magic);
@@ -608,7 +614,7 @@ static int ext2_fill_super(struct super_block *sb, void *data, int silent)
 	if (sb->s_magic != EXT2_SUPER_MAGIC)
 		goto cantfind_ext2;
 
-	/* Set defaults before we parse the mount options */
+	/* マウントオプションのパース */
 	def_mount_opts = le32_to_cpu(es->s_default_mount_opts);
 	if (def_mount_opts & EXT2_DEFM_DEBUG)
 		set_opt(sbi->s_mount_opt, DEBUG);
@@ -626,6 +632,7 @@ static int ext2_fill_super(struct super_block *sb, void *data, int silent)
 	else if (le16_to_cpu(sbi->s_es->s_errors) == EXT2_ERRORS_RO)
 		set_opt(sbi->s_mount_opt, ERRORS_RO);
 
+	// 予約ブロックのデフォルトUID及びGID
 	sbi->s_resuid = le16_to_cpu(es->s_def_resuid);
 	sbi->s_resgid = le16_to_cpu(es->s_def_resgid);
 	
@@ -662,6 +669,7 @@ static int ext2_fill_super(struct super_block *sb, void *data, int silent)
 		goto failed_mount;
 	}
 
+	/* ブロックサイズを算出 */
 	blocksize = BLOCK_SIZE << le32_to_cpu(sbi->s_es->s_log_block_size);
 
 	/* If the blocksize doesn't match, re-read the thing.. */
@@ -689,6 +697,7 @@ static int ext2_fill_super(struct super_block *sb, void *data, int silent)
 		}
 	}
 
+	// ファイル帳の最大値
 	sb->s_maxbytes = ext2_max_size(sb->s_blocksize_bits);
 
 	if (le32_to_cpu(es->s_rev_level) == EXT2_GOOD_OLD_REV) {
@@ -712,26 +721,31 @@ static int ext2_fill_super(struct super_block *sb, void *data, int silent)
 		goto cantfind_ext2;
 	sbi->s_frags_per_block = sb->s_blocksize / sbi->s_frag_size;
 
+	/* グループ内のブロック数、フラグメント数、iノード数を取得 */
 	sbi->s_blocks_per_group = le32_to_cpu(es->s_blocks_per_group);
 	sbi->s_frags_per_group = le32_to_cpu(es->s_frags_per_group);
 	sbi->s_inodes_per_group = le32_to_cpu(es->s_inodes_per_group);
 
 	if (EXT2_INODE_SIZE(sb) == 0)
 		goto cantfind_ext2;
+	/* ブロック毎のiノード数 */
 	sbi->s_inodes_per_block = sb->s_blocksize / EXT2_INODE_SIZE(sb);
 	if (sbi->s_inodes_per_block == 0)
 		goto cantfind_ext2;
+	/* iノードテーブルに使用されるブロック数 */
 	sbi->s_itb_per_group = sbi->s_inodes_per_group /
 					sbi->s_inodes_per_block;
+	/* ブロック内のグループディスクリプタ数 */
 	sbi->s_desc_per_block = sb->s_blocksize /
 					sizeof (struct ext2_group_desc);
-	sbi->s_sbh = bh;
-	sbi->s_mount_state = le16_to_cpu(es->s_state);
-	sbi->s_addr_per_block_bits =
+	sbi->s_sbh = bh; // スーパーブロック
+	sbi->s_mount_state = le16_to_cpu(es->s_state); // マウント状態
+	sbi->s_addr_per_block_bits = // アドレスのアライメント
 		log2 (EXT2_ADDR_PER_BLOCK(sb));
-	sbi->s_desc_per_block_bits =
+	sbi->s_desc_per_block_bits = // ブロック内のディスクリプタ数
 		log2 (EXT2_DESC_PER_BLOCK(sb));
 
+	// マジックナンバーのチェック
 	if (sb->s_magic != EXT2_SUPER_MAGIC)
 		goto cantfind_ext2;
 
@@ -766,21 +780,27 @@ static int ext2_fill_super(struct super_block *sb, void *data, int silent)
 
 	if (EXT2_BLOCKS_PER_GROUP(sb) == 0)
 		goto cantfind_ext2;
+	/* ブロックグループ数 */
 	sbi->s_groups_count = (le32_to_cpu(es->s_blocks_count) -
 				        le32_to_cpu(es->s_first_data_block) +
 				       EXT2_BLOCKS_PER_GROUP(sb) - 1) /
 				       EXT2_BLOCKS_PER_GROUP(sb);
 	db_count = (sbi->s_groups_count + EXT2_DESC_PER_BLOCK(sb) - 1) /
 		   EXT2_DESC_PER_BLOCK(sb);
+	/* ブロックグループディスクリプタ */
 	sbi->s_group_desc = kmalloc (db_count * sizeof (struct buffer_head *), GFP_KERNEL);
 	if (sbi->s_group_desc == NULL) {
 		printk ("EXT2-fs: not enough memory\n");
 		goto failed_mount;
 	}
+
+	/* 空きブロック数、空きiノード数、ディレクトリ数を初期化 */
 	percpu_counter_init(&sbi->s_freeblocks_counter);
 	percpu_counter_init(&sbi->s_freeinodes_counter);
 	percpu_counter_init(&sbi->s_dirs_counter);
 	bgl_lock_init(&sbi->s_blockgroup_lock);
+
+	/*  */
 	sbi->s_debts = kmalloc(sbi->s_groups_count * sizeof(*sbi->s_debts),
 			       GFP_KERNEL);
 	if (!sbi->s_debts) {
@@ -788,6 +808,8 @@ static int ext2_fill_super(struct super_block *sb, void *data, int silent)
 		goto failed_mount_group_desc;
 	}
 	memset(sbi->s_debts, 0, sbi->s_groups_count * sizeof(*sbi->s_debts));
+
+	/* グループディスクリプタの読み込み */
 	for (i = 0; i < db_count; i++) {
 		block = descriptor_loc(sb, logic_sb_block, i);
 		sbi->s_group_desc[i] = sb_bread(sb, block);
@@ -803,17 +825,17 @@ static int ext2_fill_super(struct super_block *sb, void *data, int silent)
 		db_count = i;
 		goto failed_mount2;
 	}
-	sbi->s_gdb_count = db_count;
+	sbi->s_gdb_count = db_count; // グループディスクリプタ用のブロック数
 	get_random_bytes(&sbi->s_next_generation, sizeof(u32));
 	spin_lock_init(&sbi->s_next_gen_lock);
 	/*
 	 * set up enough so that it can read an inode
 	 */
-	sb->s_op = &ext2_sops;
+	sb->s_op = &ext2_sops; // スーパーブロック用のメソッド
 	sb->s_export_op = &ext2_export_ops;
-	sb->s_xattr = ext2_xattr_handlers;
+	sb->s_xattr = ext2_xattr_handlers; // 拡張属性のためのハンドラ群
 	root = iget(sb, EXT2_ROOT_INO);
-	sb->s_root = d_alloc_root(root);
+	sb->s_root = d_alloc_root(root); // ルートディレクトリ用のdエントリ
 	if (!sb->s_root) {
 		iput(root);
 		printk(KERN_ERR "EXT2-fs: get root inode failed\n");

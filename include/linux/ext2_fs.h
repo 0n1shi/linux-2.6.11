@@ -135,14 +135,14 @@ static inline struct ext2_sb_info *EXT2_SB(struct super_block *sb)
  */
 struct ext2_group_desc
 {
-	__le32	bg_block_bitmap;		/* Blocks bitmap block */
-	__le32	bg_inode_bitmap;		/* Inodes bitmap block */
-	__le32	bg_inode_table;		/* Inodes table block */
-	__le16	bg_free_blocks_count;	/* Free blocks count */
-	__le16	bg_free_inodes_count;	/* Free inodes count */
-	__le16	bg_used_dirs_count;	/* Directories count */
-	__le16	bg_pad;
-	__le32	bg_reserved[3];
+	__le32	bg_block_bitmap;		/* ブロックビットマップのブロック番号 */
+	__le32	bg_inode_bitmap;		/* iノードビットマップのブロック番号 */
+	__le32	bg_inode_table;		/* iノードテーブルのブロック番号 */
+	__le16	bg_free_blocks_count;	/* グループ内の空きブロック数 */
+	__le16	bg_free_inodes_count;	/* グループ内の空きiノード数 */
+	__le16	bg_used_dirs_count;	/* グループ内のディレクトリ数 */
+	__le16	bg_pad; /* ワード境界のアラインメント用 */
+	__le32	bg_reserved[3]; /* パディング */
 };
 
 /*
@@ -209,17 +209,17 @@ struct ext2_group_desc
  * Structure of an inode on the disk
  */
 struct ext2_inode {
-	__le16	i_mode;		/* File mode */
-	__le16	i_uid;		/* Low 16 bits of Owner Uid */
-	__le32	i_size;		/* Size in bytes */
-	__le32	i_atime;	/* Access time */
-	__le32	i_ctime;	/* Creation time */
-	__le32	i_mtime;	/* Modification time */
-	__le32	i_dtime;	/* Deletion Time */
-	__le16	i_gid;		/* Low 16 bits of Group Id */
-	__le16	i_links_count;	/* Links count */
-	__le32	i_blocks;	/* Blocks count */
-	__le32	i_flags;	/* File flags */
+	__le16	i_mode;		/* ファイルの種類及びアクセス権 */
+	__le16	i_uid;		/* UIDの下位16bit */
+	__le32	i_size;		/* ファイルサイズ(単位:バイト) */
+	__le32	i_atime;	/* 最終アクセス時間 */
+	__le32	i_ctime;	/* 最終iノード変更時間 */
+	__le32	i_mtime;	/* 最終ファイル内容変更時間 */
+	__le32	i_dtime;	/* ファイル削除時刻 */
+	__le16	i_gid;		/* GIDの下位16bit */
+	__le16	i_links_count;	/* ハードリンクカウンタ */
+	__le32	i_blocks;	/* データブロック数 */
+	__le32	i_flags;	/* ファイルフラグ */
 	union {
 		struct {
 			__le32  l_i_reserved1;
@@ -230,12 +230,12 @@ struct ext2_inode {
 		struct {
 			__le32  m_i_reserved1;
 		} masix1;
-	} osd1;				/* OS dependent 1 */
-	__le32	i_block[EXT2_N_BLOCKS];/* Pointers to blocks */
-	__le32	i_generation;	/* File version (for NFS) */
-	__le32	i_file_acl;	/* File ACL */
-	__le32	i_dir_acl;	/* Directory ACL */
-	__le32	i_faddr;	/* Fragment address */
+	} osd1;				/* OS固有情報 */
+	__le32	i_block[EXT2_N_BLOCKS];/* データブロックの番号 */
+	__le32	i_generation;	/* ファイルバージョン(NFS用) */
+	__le32	i_file_acl;	/* ファイルのACL(Access Control List) */
+	__le32	i_dir_acl;	/* ディレクトリのACL */
+	__le32	i_faddr;	/* フラグメントのアドレス */
 	union {
 		struct {
 			__u8	l_i_frag;	/* Fragment number */
@@ -259,7 +259,7 @@ struct ext2_inode {
 			__u16	m_pad1;
 			__u32	m_i_reserved2[2];
 		} masix2;
-	} osd2;				/* OS dependent 2 */
+	} osd2;				/* OS固有情報 */
 };
 
 #define i_size_high	i_dir_acl
@@ -335,60 +335,45 @@ struct ext2_inode {
  * Structure of the super block
  */
 struct ext2_super_block {
-	__le32	s_inodes_count;		/* Inodes count */
-	__le32	s_blocks_count;		/* Blocks count */
-	__le32	s_r_blocks_count;	/* Reserved blocks count */
-	__le32	s_free_blocks_count;	/* Free blocks count */
-	__le32	s_free_inodes_count;	/* Free inodes count */
-	__le32	s_first_data_block;	/* First Data Block */
-	__le32	s_log_block_size;	/* Block size */
-	__le32	s_log_frag_size;	/* Fragment size */
-	__le32	s_blocks_per_group;	/* # Blocks per group */
-	__le32	s_frags_per_group;	/* # Fragments per group */
-	__le32	s_inodes_per_group;	/* # Inodes per group */
-	__le32	s_mtime;		/* Mount time */
-	__le32	s_wtime;		/* Write time */
-	__le16	s_mnt_count;		/* Mount count */
-	__le16	s_max_mnt_count;	/* Maximal mount count */
-	__le16	s_magic;		/* Magic signature */
-	__le16	s_state;		/* File system state */
-	__le16	s_errors;		/* Behaviour when detecting errors */
-	__le16	s_minor_rev_level; 	/* minor revision level */
-	__le32	s_lastcheck;		/* time of last check */
-	__le32	s_checkinterval;	/* max. time between checks */
-	__le32	s_creator_os;		/* OS */
-	__le32	s_rev_level;		/* Revision level */
-	__le16	s_def_resuid;		/* Default uid for reserved blocks */
-	__le16	s_def_resgid;		/* Default gid for reserved blocks */
-	/*
-	 * These fields are for EXT2_DYNAMIC_REV superblocks only.
-	 *
-	 * Note: the difference between the compatible feature set and
-	 * the incompatible feature set is that if there is a bit set
-	 * in the incompatible feature set that the kernel doesn't
-	 * know about, it should refuse to mount the filesystem.
-	 * 
-	 * e2fsck's requirements are more strict; if it doesn't know
-	 * about a feature in either the compatible or incompatible
-	 * feature set, it must abort and not try to meddle with
-	 * things it doesn't understand...
-	 */
-	__le32	s_first_ino; 		/* First non-reserved inode */
-	__le16   s_inode_size; 		/* size of inode structure */
-	__le16	s_block_group_nr; 	/* block group # of this superblock */
-	__le32	s_feature_compat; 	/* compatible feature set */
-	__le32	s_feature_incompat; 	/* incompatible feature set */
-	__le32	s_feature_ro_compat; 	/* readonly-compatible feature set */
-	__u8	s_uuid[16];		/* 128-bit uuid for volume */
-	char	s_volume_name[16]; 	/* volume name */
-	char	s_last_mounted[64]; 	/* directory where last mounted */
-	__le32	s_algorithm_usage_bitmap; /* For compression */
-	/*
-	 * Performance hints.  Directory preallocation should only
-	 * happen if the EXT2_COMPAT_PREALLOC flag is on.
-	 */
-	__u8	s_prealloc_blocks;	/* Nr of blocks to try to preallocate*/
-	__u8	s_prealloc_dir_blocks;	/* Nr to preallocate for dirs */
+	__le32	s_inodes_count;		/* iノード数 */
+	__le32	s_blocks_count;		/* ブロック数 */
+	__le32	s_r_blocks_count;	/* 予約ブロック数 */
+	__le32	s_free_blocks_count;	/* 空きブロック数 */
+	__le32	s_free_inodes_count;	/* 空きiノード数 */
+	__le32	s_first_data_block;	/* 先頭データブロック番号 */
+	__le32	s_log_block_size;	/* ブロック長 */
+	__le32	s_log_frag_size;	/* フラグメント長 */
+	__le32	s_blocks_per_group;	/* 各グループのブロック数 */
+	__le32	s_frags_per_group;	/* # 各ブループのフラグメント数 */
+	__le32	s_inodes_per_group;	/* # 各グループのiノード数 */
+	__le32	s_mtime;		/* 最終マウント時間 */
+	__le32	s_wtime;		/* 参集書き込み時間 */
+	__le16	s_mnt_count;		/* マウント操作カウンタ */
+	__le16	s_max_mnt_count;	/* fsckまでのマウント回数 */
+	__le16	s_magic;		/* マジック番号 */
+	__le16	s_state;		/* 状態フラグ */
+	__le16	s_errors;		/* エラー検出時の動作 */
+	__le16	s_minor_rev_level; 	/* マイナー改版レベル */
+	__le32	s_lastcheck;		/* 最終fsck時間 */
+	__le32	s_checkinterval;	/* fsckを行う時間感覚 */
+	__le32	s_creator_os;		/* ファイルシステムを作成したOS */
+	__le32	s_rev_level;		/* 改版レベル */
+	__le16	s_def_resuid;		/* 予約ブロック用のデフォルトUID */
+	__le16	s_def_resgid;		/* 予約ブロック用のデフォルトGID */
+
+	__le32	s_first_ino; 		/* 最初の未予約iノード番号 */
+	__le16   s_inode_size; 		/* iノード構造体のサイズ */
+	__le16	s_block_group_nr; 	/* スーパーブロックのブロックグループ番号 */
+	__le32	s_feature_compat; 	/* 互換機能の有効無効を示すビットマップ */
+	__le32	s_feature_incompat; 	/* 互換のない機能の有効無効を示すビットマップ */
+	__le32	s_feature_ro_compat; 	/* 読み取り専用時の互換機能の有効無効を示すビットマップ */
+	__u8	s_uuid[16];		/* 128bitファイルシステム識別子 */
+	char	s_volume_name[16]; 	/* ボリューム名 */
+	char	s_last_mounted[64]; 	/* 前回のマウントポイント */
+	__le32	s_algorithm_usage_bitmap; /* 圧縮処理で使用 */
+
+	__u8	s_prealloc_blocks;	/* 先行割り当てを行うブロック数 */
+	__u8	s_prealloc_dir_blocks;	/* ディレクトリ用に先行割り当てを行うブロック数 */
 	__u16	s_padding1;
 	/*
 	 * Journaling support valid if EXT3_FEATURE_COMPAT_HAS_JOURNAL set.
@@ -504,10 +489,10 @@ struct ext2_super_block {
 #define EXT2_NAME_LEN 255
 
 struct ext2_dir_entry {
-	__le32	inode;			/* Inode number */
-	__le16	rec_len;		/* Directory entry length */
-	__le16	name_len;		/* Name length */
-	char	name[EXT2_NAME_LEN];	/* File name */
+	__le32	inode;			/* iノード番号 */
+	__le16	rec_len;		/* エントリの長さ */
+	__le16	name_len;		/* 名前の長さ */
+	char	name[EXT2_NAME_LEN];	/* ファイル名(可変長: 4の倍数サイズ) */
 };
 
 /*
@@ -517,11 +502,11 @@ struct ext2_dir_entry {
  * file_type field.
  */
 struct ext2_dir_entry_2 {
-	__le32	inode;			/* Inode number */
-	__le16	rec_len;		/* Directory entry length */
-	__u8	name_len;		/* Name length */
-	__u8	file_type;
-	char	name[EXT2_NAME_LEN];	/* File name */
+	__le32	inode;			/* iノード番号 */
+	__le16	rec_len;		/* エントリの長さ */
+	__u8	name_len;		/* 名前の長さ */
+	__u8	file_type;	/* ファイル種別 */
+	char	name[EXT2_NAME_LEN];	/* ファイル名(可変長: 4の倍数サイズ) */
 };
 
 /*
@@ -529,14 +514,14 @@ struct ext2_dir_entry_2 {
  * other bits are reserved for now.
  */
 enum {
-	EXT2_FT_UNKNOWN,
-	EXT2_FT_REG_FILE,
-	EXT2_FT_DIR,
-	EXT2_FT_CHRDEV,
-	EXT2_FT_BLKDEV,
-	EXT2_FT_FIFO,
-	EXT2_FT_SOCK,
-	EXT2_FT_SYMLINK,
+	EXT2_FT_UNKNOWN,	/* 未定義 */
+	EXT2_FT_REG_FILE,	/* 通常ファイル */
+	EXT2_FT_DIR,		/* ディレクトリ */
+	EXT2_FT_CHRDEV,	/* キャラクタデバイス */
+	EXT2_FT_BLKDEV,	/* ブロックデバイス */
+	EXT2_FT_FIFO,		/* パイプ */
+	EXT2_FT_SOCK,		/* ソケット */
+	EXT2_FT_SYMLINK,	/* シンボリックリンク */
 	EXT2_FT_MAX
 };
 
