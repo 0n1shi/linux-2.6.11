@@ -395,6 +395,7 @@ struct ext3_inode {
 /*
  * Structure of the super block
  */
+
 struct ext3_super_block {
 /*00*/	__le32	s_inodes_count;		/* Inodes count */
 	__le32	s_blocks_count;		/* Blocks count */
