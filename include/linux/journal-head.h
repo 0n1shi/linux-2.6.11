@@ -17,67 +17,68 @@ struct buffer_head;
 struct journal_head {
 	/*
 	 * Points back to our buffer_head. [jbd_lock_bh_journal_head()]
+	 * バッファヘッダのポインタ群
 	 */
 	struct buffer_head *b_bh;
 
 	/*
-	 * Reference count - see description in journal.c
+	 * 参照カウンタ - see description in journal.c
 	 * [jbd_lock_bh_journal_head()]
 	 */
 	int b_jcount;
 
 	/*
-	 * Journalling list for this buffer [jbd_lock_bh_state()]
+	 * このバッファのジャーナリングリスト [jbd_lock_bh_state()]
 	 */
 	unsigned b_jlist;
 
 	/*
-	 * Copy of the buffer data frozen for writing to the log.
+	 * ログに書き込むためのバッファデータのコピー
 	 * [jbd_lock_bh_state()]
 	 */
 	char *b_frozen_data;
 
 	/*
-	 * Pointer to a saved copy of the buffer containing no uncommitted
-	 * deallocation references, so that allocations can avoid overwriting
-	 * uncommitted deletes. [jbd_lock_bh_state()]
+	 * コミットされていないデアロケーション参照を保持しない保存されたバッファのコピー
+	 * アロケーションはコミットされていない削除をオーパライトすることを回避できる
 	 */
 	char *b_committed_data;
 
 	/*
-	 * Pointer to the compound transaction which owns this buffer's
-	 * metadata: either the running transaction or the committing
-	 * transaction (if there is one).  Only applies to buffers on a
-	 * transaction's data or metadata journaling list.
+	 * バッファのメタデータを保持するトランザクションを参照するポインタ
+	 * 動作中のトランザクションもしくはコミット中のトランザクション。
+	 * トランザクションのデータもしくはメタデータのジャーナリングリスト上の
+	 * バッファに対して適応される。
+	 * 
 	 * [j_list_lock] [jbd_lock_bh_state()]
 	 */
 	transaction_t *b_transaction;
 
 	/*
-	 * Pointer to the running compound transaction which is currently
-	 * modifying the buffer's metadata, if there was already a transaction
-	 * committing it when the new transaction touched it.
 	 * [t_list_lock] [jbd_lock_bh_state()]
+	 * 現在バッファのメタデータを変更している動作中のトランザクションを参照するポインタ
+	 * もしコミット中のトランザクションが存在した場合新たなトランザクションがそれを処理する。
 	 */
 	transaction_t *b_next_transaction;
 
 	/*
-	 * Doubly-linked list of buffers on a transaction's data, metadata or
-	 * forget queue. [t_list_lock] [jbd_lock_bh_state()]
+	 * [t_list_lock] [jbd_lock_bh_state()]
+	 * トランザクションデータ上のバッファの双方向リスト。メタデータもしくは忘れられたキュー
 	 */
 	struct journal_head *b_tnext, *b_tprev;
 
 	/*
-	 * Pointer to the compound transaction against which this buffer
-	 * is checkpointed.  Only dirty buffers can be checkpointed.
 	 * [j_list_lock]
+	 * このバッファがチェックポイントのトランザクションを参照するポインタ
+	 * ダーティのバッファのみチェックポイントになることが可能
 	 */
 	transaction_t *b_cp_transaction;
 
 	/*
-	 * Doubly-linked list of buffers still remaining to be flushed
-	 * before an old transaction can be checkpointed.
 	 * [j_list_lock]
+	 * 古いトランザクションがチェックポイントになることができる前の
+	 * フラッシュ待ちのバッファの双方向リスト。
+	 * 
 	 */
 	struct journal_head *b_cpnext, *b_cpprev;
 };

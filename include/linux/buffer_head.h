@@ -50,18 +50,18 @@ typedef void (bh_end_io_t)(struct buffer_head *bh, int uptodate);
 struct buffer_head {
 	/* First cache line: */
 	unsigned long b_state;		/* バッファステートビットマップ */
-	struct buffer_head *b_this_page;/* circular list of page's buffers */
-	struct page *b_page;		/* the page this bh is mapped to */
-	atomic_t b_count;		/* users using this block */
+	struct buffer_head *b_this_page;/* ページバッファの循環リスト */
+	struct page *b_page;		/* バッファヘッダがマップされているページ */
+	atomic_t b_count;		/* このブロックを使用しているユーザ数 */
 	u32 b_size;			/* ブロックサイズ */
 
 	sector_t b_blocknr;		/* ブロック番号 */
 	char *b_data;			/* データブロックへのポインタ */
 
 	struct block_device *b_bdev;
-	bh_end_io_t *b_end_io;		/* I/O completion */
- 	void *b_private;		/* reserved for b_end_io */
-	struct list_head b_assoc_buffers; /* associated with another mapping */
+	bh_end_io_t *b_end_io;		/* I/O完了 */
+ 	void *b_private;		/* b_end_ioのために予約 */
+	struct list_head b_assoc_buffers; /* 他のマッピングとの関連付け */
 };
 
 /*

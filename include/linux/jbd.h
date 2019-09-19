@@ -133,7 +133,7 @@ typedef struct journal_s	journal_t;	/* Journal control structure */
 #define JFS_REVOKE_BLOCK	5
 
 /*
- * Standard header for all descriptor blocks:
+ * ディスクリプタブロックのためのスタンダードヘッダ:
  */
 typedef struct journal_header_s
 {
@@ -144,11 +144,11 @@ typedef struct journal_header_s
 
 
 /* 
- * The block tag: used to describe a single buffer in the journal 
+ * ブロックタグ: ジャーナル内のシングルバッファを表現するのに使用される 
  */
 typedef struct journal_block_tag_s
 {
-	__be32		t_blocknr;	/* The on-disk block number */
+	__be32		t_blocknr;	/* ディスク上のブロック番号 */
 	__be32		t_flags;	/* See below */
 } journal_block_tag_t;
 
@@ -163,11 +163,11 @@ typedef struct journal_revoke_header_s
 } journal_revoke_header_t;
 
 
-/* Definitions for the journal tag flags word: */
-#define JFS_FLAG_ESCAPE		1	/* on-disk block is escaped */
-#define JFS_FLAG_SAME_UUID	2	/* block has same uuid as previous */
-#define JFS_FLAG_DELETED	4	/* block deleted by this transaction */
-#define JFS_FLAG_LAST_TAG	8	/* last tag in this descriptor block */
+/* ジャーナルタグフラグの定義 */
+#define JFS_FLAG_ESCAPE		1	/* ディスク上のブロックはエスケープされている */
+#define JFS_FLAG_SAME_UUID	2	/* 以前のUUIDをブロックは保持している */
+#define JFS_FLAG_DELETED	4	/* このトランザクションでブロックは削除された */
+#define JFS_FLAG_LAST_TAG	8	/* このディスクリプタブロック内の最後のタグ */
 
 
 /*
@@ -292,15 +292,15 @@ void buffer_assertion_failure(struct buffer_head *bh);
 #endif
 
 enum jbd_state_bits {
-	BH_JBD			/* Has an attached ext3 journal_head */
+	BH_JBD			/* アタッチされたext3のjournal_headを持つ */
 	  = BH_PrivateStart,
-	BH_JWrite,		/* Being written to log (@@@ DEBUGGING) */
-	BH_Freed,		/* Has been freed (truncated) */
-	BH_Revoked,		/* Has been revoked from the log */
-	BH_RevokeValid,		/* Revoked flag is valid */
-	BH_JBDDirty,		/* Is dirty but journaled */
+	BH_JWrite,		/* ログに書き込まれている状態 */
+	BH_Freed,		/* 開放されている */
+	BH_Revoked,		/* ログから削除されている */
+	BH_RevokeValid,		/* 廃止されたフラグは有効 */
+	BH_JBDDirty,		/* ダーティだがジャーナリングされている */
 	BH_State,		/* Pins most journal_head state */
-	BH_JournalHead,		/* Pins bh->b_private and jh->b_bh */
+	BH_JournalHead,		/* bh->b_private and jh->b_bh */
 	BH_Unshadow,		/* Dummy bit, for BJ_Shadow wakeup filtering */
 };
 
