@@ -876,11 +876,36 @@ int generic_osync_inode(struct inode *, struct address_space *, int);
 typedef int (*filldir_t)(void *, const char *, int, loff_t, ino_t, unsigned);
 
 struct block_device_operations {
+	/**
+	 * ブロックデバイスのオープン時
+	 */
 	int (*open) (struct inode *, struct file *);
+
+	/**
+	 * ブロックデバイスファイルの最後の参照のクローズ時
+	 */
 	int (*release) (struct inode *, struct file *);
+
+	/**
+	 * ブロックデバイスファイルに対するioctlシステムコールの発行時
+	 * (ビッグカーネルロック使用)
+	 */
 	int (*ioctl) (struct inode *, struct file *, unsigned, unsigned long);
+
+	/**
+	 * ブロックデバイスファイルに対するioctlシステムコールの発行時
+	 * (ビッグカーネルロック未使用)
+	 */
 	long (*compat_ioctl) (struct file *, unsigned, unsigned long);
+
+	/**
+	 * リムーバブルメディアが差し替えられたかどうかの確認時
+	 */
 	int (*media_changed) (struct gendisk *);
+
+	/**
+	 * ブロックデバイスが有効なデータを保持しているかの確認時
+	 */
 	int (*revalidate_disk) (struct gendisk *);
 	struct module *owner;
 };

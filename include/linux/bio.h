@@ -54,9 +54,9 @@
  * was unsigned short, but we might as well be ready for > 64kB I/O pages
  */
 struct bio_vec {
-	struct page	*bv_page;
-	unsigned int	bv_len;
-	unsigned int	bv_offset;
+	struct page	*bv_page; /* セグメントのページフレームのページディスクリプタのポインタ */
+	unsigned int	bv_len; /* セグメント長(単位:バイト) */
+	unsigned int	bv_offset; /* ページフレーム内のセグメントオフセット */
 };
 
 struct bio;
@@ -68,28 +68,26 @@ typedef void (bio_destructor_t) (struct bio *);
  * stacking drivers)
  */
 struct bio {
-	sector_t		bi_sector;
-	struct bio		*bi_next;	/* request queue link */
-	struct block_device	*bi_bdev;
-	unsigned long		bi_flags;	/* status, command, etc */
-	unsigned long		bi_rw;		/* bottom bits READ/WRITE,
-						 * top bits priority
-						 */
+	sector_t		bi_sector; /* ディスク上のブロックI/Oを行う先頭セクタ */
+	struct bio		*bi_next;	/* リクエストキューへのリンク */
+	struct block_device	*bi_bdev; /* ブロックデバイスドライバへのポインタ */
+	unsigned long		bi_flags;	/* ステータスフラグ */
+	unsigned long		bi_rw;		/* I/O操作フラグ */
 
-	unsigned short		bi_vcnt;	/* how many bio_vec's */
-	unsigned short		bi_idx;		/* current index into bvl_vec */
+	unsigned short		bi_vcnt;	/* bio_vec配列のセグメント数 */
+	unsigned short		bi_idx;		/* bio_vec配列のインデックス */
 
 	/* Number of segments in this BIO after
 	 * physical address coalescing is performed.
 	 */
-	unsigned short		bi_phys_segments;
+	unsigned short		bi_phys_segments; /* 結合後の物理セグメント数 */
 
 	/* Number of segments after physical and DMA remapping
 	 * hardware coalescing is performed.
 	 */
-	unsigned short		bi_hw_segments;
+	unsigned short		bi_hw_segments; /* 結合後のハードウェアセグメント数 */
 
-	unsigned int		bi_size;	/* residual I/O count */
+	unsigned int		bi_size;	/* 転送バイト数 */
 
 	/*
 	 * To keep track of the max hw size, we account for the
@@ -99,14 +97,14 @@ struct bio {
 	unsigned int		bi_hw_front_size;
 	unsigned int		bi_hw_back_size;
 
-	unsigned int		bi_max_vecs;	/* max bvl_vecs we can hold */
+	unsigned int		bi_max_vecs;	/* bio_vec配列の最大数 */
 
-	struct bio_vec		*bi_io_vec;	/* the actual vec list */
+	struct bio_vec		*bi_io_vec;	/* bio_vec配列へのポインタ */
 
-	bio_end_io_t		*bi_end_io;
-	atomic_t		bi_cnt;		/* pin count */
+	bio_end_io_t		*bi_end_io; /* I/O処理の最後に呼ばれるメソッド */
+	atomic_t		bi_cnt;		/* bioの参照カウンタ */
 
-	void			*bi_private;
+	void			*bi_private; /* 汎用ブロック層とブロックデバイスドライバのI/O完了処理メソッドで使用するポインタ */
 
 	bio_destructor_t	*bi_destructor;	/* destructor */
 };
@@ -114,15 +112,15 @@ struct bio {
 /*
  * bio flags
  */
-#define BIO_UPTODATE	0	/* ok after I/O completion */
-#define BIO_RW_BLOCK	1	/* RW_AHEAD set, and read/write would block */
-#define BIO_EOF		2	/* out-out-bounds error */
-#define BIO_SEG_VALID	3	/* nr_hw_seg valid */
-#define BIO_CLONED	4	/* doesn't own data */
-#define BIO_BOUNCED	5	/* bio is a bounce bio */
-#define BIO_USER_MAPPED 6	/* contains user pages */
-#define BIO_EOPNOTSUPP	7	/* not supported */
-#define bio_flagged(bio, flag)	((bio)->bi_flags & (1 << (flag)))
+#define BIO_UPTODATE	0	/* I/O処理の完了 */
+#define BIO_RW_BLOCK	1	/* RW_AHEADがセットされており読み書き処理はブロックされる */
+#define BIO_EOF		2	/* out-out-boundsエラー */
+#define BIO_SEG_VALID	3	/* セグメントが有効 */
+#define BIO_CLONED	4	/* クローンされた */
+#define BIO_BOUNCED	5	/* バウンスbio */
+#define BIO_USER_MAPPED 6	/* ユーザ空間のページを保持 */
+#define BIO_EOPNOTSUPP	7	/* サポートしていない */
+#define bio_flagged(bio, flag)	((bio)->bi_flags & (1 << (flag))) /* フラグが設定されているかどうか */
 
 /*
  * top 4 bits of bio flags indicate the pool this bio came from
@@ -141,11 +139,11 @@ struct bio {
  * bit 3 -- fail fast, don't want low level driver retries
  * bit 4 -- synchronous I/O hint: the block layer will unplug immediately
  */
-#define BIO_RW		0
-#define BIO_RW_AHEAD	1
-#define BIO_RW_BARRIER	2
-#define BIO_RW_FAILFAST	3
-#define BIO_RW_SYNC	4
+#define BIO_RW		0 /* 読み込みもしくは書き込み */
+#define BIO_RW_AHEAD	1 /* rw-aheadがセットされている */
+#define BIO_RW_BARRIER	2 /* バリア */
+#define BIO_RW_FAILFAST	3 /* ドライバがリトライしない */
+#define BIO_RW_SYNC	4 /* ブロック層はすぐにアンプラグされる */
 
 /*
  * various member access, note that bio_data should of course not be used

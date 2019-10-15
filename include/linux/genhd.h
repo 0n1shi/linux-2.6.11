@@ -75,18 +75,28 @@ struct partition {
 } __attribute__((packed));
 
 struct hd_struct {
-	sector_t start_sect;
-	sector_t nr_sects;
-	struct kobject kobj;
+	sector_t start_sect; /* 先頭セクタ番号 */
+	sector_t nr_sects; /* セクタ数 */
+	struct kobject kobj; /* 組み込みkオブジェクト */
+	/**
+	 * reads: パーティションに発行した組み込み処理数
+	 * read_sectors: パーティションから読み込んだセクタ数
+	 * writes: パーティションに発行した書き込み処理数
+	 * write_sectors: パーティションに書き込んだセクタ数
+	 */
 	unsigned reads, read_sectors, writes, write_sectors;
+	/**
+	 * policy: パーティションが読み込み専用の場合: 1
+	 * partno: パーティション番号
+	 */
 	int policy, partno;
 };
 
-#define GENHD_FL_REMOVABLE			1
-#define GENHD_FL_DRIVERFS			2
-#define GENHD_FL_CD				8
-#define GENHD_FL_UP				16
-#define GENHD_FL_SUPPRESS_PARTITION_INFO	32
+#define GENHD_FL_REMOVABLE			1 /* ディスクが取り外し可能 */
+#define GENHD_FL_DRIVERFS			2 /*  */
+#define GENHD_FL_CD				8 /* CD-ROM */
+#define GENHD_FL_UP				16 /* 動作中(初期化済み) */
+#define GENHD_FL_SUPPRESS_PARTITION_INFO	32 /* パーティション情報の表示を抑制する */
 
 struct disk_stats {
 	unsigned read_sectors, write_sectors;
@@ -98,31 +108,30 @@ struct disk_stats {
 };
 	
 struct gendisk {
-	int major;			/* major number of driver */
-	int first_minor;
-	int minors;                     /* maximum number of minors, =1 for
-                                         * disks that can't be partitioned. */
-	char disk_name[32];		/* name of major driver */
-	struct hd_struct **part;	/* [indexed by minor] */
-	struct block_device_operations *fops;
-	struct request_queue *queue;
-	void *private_data;
-	sector_t capacity;
+	int major; /* ディスクのメジャー番号 */
+	int first_minor; /* ディスクのマイナー番号範囲の先頭 */
+	int minors; /* マイナー番号の最大値(1=パーティションできない) */
+	char disk_name[32];	/* デイバスファイル名 */
+	struct hd_struct **part; /* ディスクのパーティションディスクリプタの配列 */
+	struct block_device_operations *fops; /* ブロック型デバイスメソッド群へのポインタ */
+	struct request_queue *queue; /* ディスクのリクエストキューへのポインタ */
+	void *private_data; /*ブロックデバイスドライバ固有のデータ */
+	sector_t capacity; /* ディスク記録領域のサイズ(単位:セクタ) */
 
-	int flags;
-	char devfs_name[64];		/* devfs crap */
-	int number;			/* more of the same */
-	struct device *driverfs_dev;
-	struct kobject kobj;
+	int flags; /* ディスク種別を表すフラグ */
+	char devfs_name[64]; /* devfs crap */
+	int number;	/* more of the same */
+	struct device *driverfs_dev; /* ディスクのハードウェアデバイスオブジェクトへのポインタ */
+	struct kobject kobj; /* 組み込みkオブジェクト */
 
-	struct timer_rand_state *random;
-	int policy;
+	struct timer_rand_state *random; /* 割り込み時点を記録するデータ構造へのポインタ */
+	int policy; /* ディスクが読み込み専用かどうか */
 
-	atomic_t sync_io;		/* RAID */
-	unsigned long stamp, stamp_idle;
-	int in_flight;
+	atomic_t sync_io;		/* ディスクに書き込むセクタのカウンタ */
+	unsigned long stamp, stamp_idle; /* ディスクキューの統計情報のためのタイムスタンプ */
+	int in_flight;　/* 処理中のI/O数 */
 #ifdef	CONFIG_SMP
-	struct disk_stats *dkstats;
+	struct disk_stats *dkstats; /* CPU毎のディスク統計情報 */
 #else
 	struct disk_stats dkstats;
 #endif

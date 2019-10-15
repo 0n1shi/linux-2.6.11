@@ -14,9 +14,14 @@
  * nesting etc..
  */
 struct resource {
-	const char *name;
-	unsigned long start, end;
-	unsigned long flags;
+	const char *name; /* 所有者 */
+	unsigned long start, end; /* I/Oアドレスポートの範囲(開始位置、終了位置) */
+	unsigned long flags; /* フラグ */
+	/**
+	 * parent: 親リソースへのポインタ
+	 * sibling: 次のリソースへのポインタ
+	 * child: 子リソースへのポインタ
+	 */
 	struct resource *parent, *sibling, *child;
 };
 
