@@ -21,7 +21,7 @@
 #include <asm/atomic.h>
 
 struct kref {
-	atomic_t refcount;
+	atomic_t refcount; /* 参照 */
 };
 
 void kref_init(struct kref *kref);

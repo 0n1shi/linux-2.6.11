@@ -32,14 +32,14 @@
 extern u64 hotplug_seqnum;
 
 struct kobject {
-	char			* k_name;
-	char			name[KOBJ_NAME_LEN];
-	struct kref		kref;
-	struct list_head	entry;
-	struct kobject		* parent;
-	struct kset		* kset;
-	struct kobj_type	* ktype;
-	struct dentry		* dentry;
+	char			* k_name; /* コンテナ名の文字列へのポインタ */
+	char			name[KOBJ_NAME_LEN]; /* コンテナ名(20バイト以内) */
+	struct kref		kref; /* コンテナの参照カウンタ */
+	struct list_head	entry; /* kオブジェクトリストのポインタ */
+	struct kobject		* parent; /* 親オブジェクトへのポインタ */
+	struct kset		* kset; /* kオブジェクトを保持するkセットへのポインタ */
+	struct kobj_type	* ktype; /* kオブジェクト種別へのポインタ */
+	struct dentry		* dentry; /* kオブジェクトに対応するsysfsのdエントリへのポインタ */
 };
 
 extern int kobject_set_name(struct kobject *, const char *, ...)
@@ -67,9 +67,9 @@ extern void kobject_put(struct kobject *);
 extern char * kobject_get_path(struct kobject *, int);
 
 struct kobj_type {
-	void (*release)(struct kobject *);
-	struct sysfs_ops	* sysfs_ops;
-	struct attribute	** default_attrs;
+	void (*release)(struct kobject *); /* オブジェクトの開放処理 */
+	struct sysfs_ops	* sysfs_ops; /* オブジェクトの操作 */
+	struct attribute	** default_attrs; /* 属性値 */
 };
 
 
@@ -99,10 +99,10 @@ struct kset_hotplug_ops {
 };
 
 struct kset {
-	struct subsystem	* subsys;
-	struct kobj_type	* ktype;
-	struct list_head	list;
-	struct kobject		kobj;
+	struct subsystem	* subsys; /* サブシステムディスクリプタへのポインタ */
+	struct kobj_type	* ktype; /* kセットのkオブジェクト種別ディスクリプタへのポインタ */
+	struct list_head	list; /* kセットに含まれるkオブジェクトリストの先頭 */
+	struct kobject		kobj; /* 組み込みkオブジェクト */
 	struct kset_hotplug_ops	* hotplug_ops;
 };
 
