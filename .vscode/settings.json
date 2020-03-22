@@ -6,6 +6,8 @@
         "optional": "cpp",
         "string_view": "cpp",
         "system_error": "cpp",
-        "thread": "cpp"
+        "thread": "cpp",
+        "locale": "cpp",
+        "string": "cpp"
     }
 }

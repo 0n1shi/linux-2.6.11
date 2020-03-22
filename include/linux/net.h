@@ -103,15 +103,15 @@ enum sock_type {
  *  @passcred - credentials (used only in Unix Sockets (aka PF_LOCAL))
  */
 struct socket {
-	socket_state		state;
-	unsigned long		flags;
-	struct proto_ops	*ops;
+	socket_state		state; /* ソケットのステータス */
+	unsigned long		flags; /* フラグ */
+	struct proto_ops	*ops; /* ソケットに対する操作群 */
 	struct fasync_struct	*fasync_list;
-	struct file		*file;
-	struct sock		*sk;
-	wait_queue_head_t	wait;
-	short			type;
-	unsigned char		passcred;
+	struct file		*file; /* ファイル操作 */
+	struct sock		*sk; /* ソケットの詳細情報 */
+	wait_queue_head_t	wait; /* 待ちキュー */
+	short			type; /* 種類 */
+	unsigned char		passcred; /* 認証関連 */
 };
 
 struct vm_area_struct;

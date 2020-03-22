@@ -1076,9 +1076,9 @@ static int __sock_create(int family, int type, int protocol, struct socket **res
 	/*
 	 *	Check protocol is in range
 	 */
-	if (family < 0 || family >= NPROTO)
+	if (family < 0 || family >= NPROTO) // プロトコルファミリのバリデーション AF_MAXを使うべきでは...
 		return -EAFNOSUPPORT;
-	if (type < 0 || type >= SOCK_MAX)
+	if (type < 0 || type >= SOCK_MAX) // 通信方式のパリデーション
 		return -EINVAL;
 
 	/* Compatibility.
@@ -1112,6 +1112,7 @@ static int __sock_create(int family, int type, int protocol, struct socket **res
 	}
 #endif
 
+	/* 対象のプロトコルファミリーがサポートされていない場合 */
 	net_family_read_lock();
 	if (net_families[family] == NULL) {
 		err = -EAFNOSUPPORT;
@@ -1124,6 +1125,7 @@ static int __sock_create(int family, int type, int protocol, struct socket **res
  *	default.
  */
 
+	/* iノード及びソケットの割り当てる */
 	if (!(sock = sock_alloc())) {
 		printk(KERN_WARNING "socket: no more sockets\n");
 		err = -ENFILE;		/* Not exactly a match, but its the
@@ -1131,7 +1133,7 @@ static int __sock_create(int family, int type, int protocol, struct socket **res
 		goto out;
 	}
 
-	sock->type  = type;
+	sock->type  = type; // システムコールで指定された通信方式を設定
 
 	/*
 	 * We will call the ->create function, that possibly is in a loadable
@@ -1141,6 +1143,7 @@ static int __sock_create(int family, int type, int protocol, struct socket **res
 	if (!try_module_get(net_families[family]->owner))
 		goto out_release;
 
+	/* プロトコルファミリ専用のcreateを関数 */
 	if ((err = net_families[family]->create(sock, protocol)) < 0)
 		goto out_module_put;
 	/*
@@ -1159,6 +1162,7 @@ static int __sock_create(int family, int type, int protocol, struct socket **res
 	*res = sock;
 	security_socket_post_create(sock, family, type, protocol, kern);
 
+	/* エラー処理 */
 out:
 	net_family_read_unlock();
 	return err;
@@ -1184,21 +1188,23 @@ asmlinkage long sys_socket(int family, int type, int protocol)
 	int retval;
 	struct socket *sock;
 
+	// ソケットの作成
 	retval = sock_create(family, type, protocol, &sock);
-	if (retval < 0)
+	if (retval < 0) // 作成失敗
 		goto out;
 
+	// 作成したソケットをファイルディスクリプタにバインド
 	retval = sock_map_fd(sock);
-	if (retval < 0)
+	if (retval < 0) // バインド失敗
 		goto out_release;
 
 out:
 	/* It may be already another descriptor 8) Not kernel problem. */
-	return retval;
+	return retval; // エラー番号を返す
 
 out_release:
-	sock_release(sock);
-	return retval;
+	sock_release(sock); // ソケットの解放
+	return retval; // エラー番号を返す
 }
 
 /*
